@@ -102,6 +102,40 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [customEndDate, setCustomEndDate] = useState('');
   const [filteredRecords, setFilteredRecords] = useState<AttendanceRecord[]>([]);
 
+  // -- Persistência de Login do Funcionário --
+  useEffect(() => {
+    if (role === UserRole.EMPLOYEE) {
+      const storedEmployee = localStorage.getItem('nexus_employee');
+      const storedVerified = localStorage.getItem('nexus_verified');
+      
+      if (storedEmployee && storedVerified === 'true') {
+        try {
+          const emp = JSON.parse(storedEmployee);
+          // Validar se pertence à empresa atual se necessário
+          if (emp.companyId === currentCompanyId) {
+             setIdentifiedEmployee(emp);
+             setIsBiometricVerified(true);
+          }
+        } catch (e) {
+          console.error("Erro ao restaurar sessão", e);
+        }
+      }
+    }
+  }, [role, currentCompanyId]);
+
+  useEffect(() => {
+    if (isBiometricVerified && identifiedEmployee) {
+      localStorage.setItem('nexus_employee', JSON.stringify(identifiedEmployee));
+      localStorage.setItem('nexus_verified', 'true');
+    }
+  }, [isBiometricVerified, identifiedEmployee]);
+
+  const handleDashboardLogout = () => {
+    localStorage.removeItem('nexus_employee');
+    localStorage.removeItem('nexus_verified');
+    onBack();
+  };
+
   // -- Load Face API Models (for both Company and Employee) --
   useEffect(() => {
     const loadModels = async () => {
@@ -230,11 +264,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           }
 
           stream = mediaStream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = mediaStream;
-            setScanMessage('Posicione o rosto no centro...');
-            console.log('✅ Câmera pronta para identificação');
-          }
+          
+          // Função para tentar atribuir o stream ao vídeo com retries
+          const assignStreamToVideo = (attempts = 0) => {
+            if (videoRef.current) {
+              videoRef.current.srcObject = mediaStream;
+              setScanMessage('Posicione o rosto no centro...');
+              console.log('✅ Câmera pronta para identificação');
+            } else if (attempts < 20 && isActive) {
+              // Tenta novamente em 100ms se o elemento de vídeo ainda não estiver montado
+              // Isso corrige o problema de "tela com borda mas sem câmera"
+              console.log(`⏳ Aguardando elemento de vídeo... (tentativa ${attempts + 1})`);
+              setTimeout(() => assignStreamToVideo(attempts + 1), 100);
+            } else {
+              console.warn('⚠️ Não foi possível encontrar o elemento de vídeo após várias tentativas.');
+            }
+          };
+          
+          assignStreamToVideo();
+
         } catch (err: any) {
           console.error("❌ Erro ao acessar câmera:", err);
           console.error("Tipo de erro:", err.name);
@@ -302,16 +350,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     let attendanceValidationInterval: NodeJS.Timeout | null = null;
 
     // 🔥 Validação contínua durante registro de ponto para habilitar botão
-    if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee && videoRef.current) {
+    if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee) {
       console.log('🤖 Iniciando validação contínua para registro de ponto...');
       
       // Aguardar 1 segundo para câmera estabilizar
       const startDelay = setTimeout(() => {
         attendanceValidationInterval = setInterval(() => {
-          if (!isRegisteringAttendance) {
-            verifyIdentityForAttendance();
+          if (!isRegisteringAttendance && !isScanning) {
+            autoRecognizeAndRegister();
           }
-        }, 1000); // A cada 1 segundo para feedback rápido
+        }, 2500); // A cada 2.5 segundos
       }, 1000);
 
       return () => {
@@ -322,7 +370,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         }
       };
     }
-  }, [showAttendanceFlow, locationVerified, cameraActive, modelsLoaded, isRegisteringAttendance, identifiedEmployee]);
+  }, [showAttendanceFlow, locationVerified, cameraActive, modelsLoaded, isRegisteringAttendance, identifiedEmployee, isScanning]);
 
   // -- Load Current Location and Attendance Records (Employee View) --
   useEffect(() => {
@@ -1397,6 +1445,72 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   };
 
+  // 🔥 NOVO: Função de reconhecimento e registro automático
+  const autoRecognizeAndRegister = async () => {
+    if (!videoRef.current || !canvasRef.current || !identifiedEmployee || !modelsLoaded) return;
+    
+    setIsScanning(true);
+    setScanMessage('🔍 Verificando identidade...');
+
+    try {
+      // 1. Detectar rosto no vídeo
+      const videoEl = videoRef.current;
+      const detection = await faceapi.detectSingleFace(videoEl)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        setScanMessage('👤 Posicione seu rosto...');
+        setIsScanning(false);
+        return;
+      }
+
+      // 2. Comparar com foto do funcionário logado (SEGURANÇA)
+      const img = await loadImage(identifiedEmployee.photoBase64 || '');
+      const referenceDetection = await faceapi.detectSingleFace(img)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!referenceDetection) {
+         console.error('Erro ao processar foto de referência');
+         setIsScanning(false);
+         return;
+      }
+
+      // 3. Calcular similaridade
+      const distance = faceapi.euclideanDistance(
+        detection.descriptor, 
+        referenceDetection.descriptor
+      );
+      const SECURITY_THRESHOLD = 0.55;
+
+      console.log(`📊 Distância euclidiana: ${distance.toFixed(4)} (threshold: ${SECURITY_THRESHOLD})`);
+
+      if (distance > SECURITY_THRESHOLD) {
+        // ❌ NÃO é a mesma pessoa
+        setScanMessage('⚠️ Rosto não corresponde');
+        // Opcional: alertar usuário
+        // alert('❌ ERRO DE SEGURANÇA\n\nO rosto detectado não corresponde ao funcionário logado.');
+        setIsScanning(false);
+        return;
+      }
+
+      // ✅ É a mesma pessoa - Registrar ponto
+      setScanMessage('✅ Identidade confirmada! Registrando...');
+      setIsIdentityConfirmed(true);
+      
+      // Pequeno delay para feedback visual antes de registrar
+      setTimeout(async () => {
+        await registerAttendance();
+        setIsScanning(false);
+      }, 500);
+
+    } catch (err) {
+      console.error('❌ Erro no reconhecimento automático:', err);
+      setIsScanning(false);
+    }
+  };
+
 
   // -- Render Helpers --
 
@@ -1634,7 +1748,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                     playsInline 
                                     muted 
                                     aria-label="Câmera para captura facial"
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-cover transform scale-x-[-1]"
                                   />
                                   <canvas ref={captureCanvasRef} className="hidden" aria-hidden="true" />
                                   
@@ -1901,7 +2015,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         <TechBackground />
         
         <div className="relative z-30 w-full max-w-md">
-           <button onClick={onBack} className="absolute -top-12 left-0 text-slate-400 flex items-center gap-2 text-xs uppercase"><ArrowLeft className="w-4 h-4"/> Desconectar</button>
+           <button onClick={handleDashboardLogout} className="absolute -top-12 left-0 text-slate-400 flex items-center gap-2 text-xs uppercase"><ArrowLeft className="w-4 h-4"/> Desconectar</button>
            
            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-[0_0_60px_-10px_rgba(217,70,239,0.2)] text-center overflow-hidden transition-all duration-300">
               
@@ -1941,7 +2055,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                 ) : (
                   <div className="flex flex-col items-center">
                      <div className="relative w-full aspect-[3/4] bg-black rounded-lg overflow-hidden border-2 border-fuchsia-500 shadow-2xl mb-4">
-                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
                         <canvas ref={canvasRef} className="hidden" />
                         
                         {/* Scanning Overlay */}
@@ -2053,7 +2167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                  </div>
                </div>
             </div>
-            <button onClick={onBack} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300"><ArrowLeft className="w-5 h-5" /></button>
+            <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300"><ArrowLeft className="w-5 h-5" /></button>
          </div>
 
          {/* Time Clock Action */}
@@ -2145,7 +2259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
          {/* Attendance Flow Modal */}
          {showAttendanceFlow && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-             <div className="bg-slate-900 border-2 border-fuchsia-500/50 rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-[0_0_50px_rgba(217,70,239,0.3)]">
+             <div className="bg-slate-900 border-2 border-fuchsia-500/50 rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-[0_0_50px_rgba(217,70,239,0.3)] relative">
                {/* Header */}
                <div className="flex justify-between items-center mb-6">
                  <div>
@@ -2180,7 +2294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                )}
 
                {/* Step 2: Reconhecimento Facial Automático */}
-               {locationVerified && cameraActive && !isRegisteringAttendance && (
+               {locationVerified && !isRegisteringAttendance && (
                  <div className="space-y-4">
                    <div className="bg-green-950/30 rounded-xl p-4 border border-green-500/30">
                      <p className="text-green-400 text-sm font-semibold mb-2 flex items-center gap-2">
@@ -2195,7 +2309,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                        autoPlay 
                        playsInline 
                        muted
-                       className="w-full h-[400px] object-cover rounded-xl border-2 border-fuchsia-500/50"
+                       className="w-full h-[400px] object-cover rounded-xl border-2 border-fuchsia-500/50 transform scale-x-[-1]"
                      />
                      <canvas ref={canvasRef} className="hidden" />
                      
