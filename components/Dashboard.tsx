@@ -133,6 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const handleDashboardLogout = () => {
     localStorage.removeItem('nexus_employee');
     localStorage.removeItem('nexus_verified');
+    stopCamera(); // Garantir que a câmera pare ao sair
     onBack();
   };
 
@@ -910,6 +911,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       if (found.pin === pinForLogin) {
          setIdentifiedEmployee(found);
          setIsBiometricVerified(true);
+         stopCamera(); // Parar câmera ao logar com PIN
       } else {
          alert("PIN incorreto.");
       }
@@ -1007,6 +1009,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         setIdentifiedEmployee(bestMatch.employee);
         setIsBiometricVerified(true);
         setScanMessage('Identificação bem-sucedida!');
+        stopCamera(); // Parar câmera ao identificar com sucesso
         
         // NÃO registrar automaticamente - deixar o usuário confirmar no modal
         console.log('✅ Identificação concluída. Aguardando confirmação do usuário para registrar ponto.');
@@ -1064,7 +1067,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
       // Step 2: Abrir câmera para reconhecimento facial
       console.log('📷 Abrindo câmera para reconhecimento facial...');
-      setCameraActive(true);
+      
+      // Forçar reinício da câmera se já estiver ativa (para garantir que o vídeo apareça no modal)
+      if (cameraActive) {
+          console.log('🔄 Reiniciando câmera para garantir visualização...');
+          setCameraActive(false);
+          setTimeout(() => setCameraActive(true), 200);
+      } else {
+          setCameraActive(true);
+      }
 
     } catch (error: any) {
       console.error('❌ Erro ao verificar localização:', error);
@@ -2045,7 +2056,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <div className="space-y-4 text-left">
                       <button 
-                        onClick={() => setShowPinLogin(true)}
+                        onClick={() => { setShowPinLogin(true); stopCamera(); }}
                         className="w-full text-center text-xs text-slate-500 hover:text-fuchsia-400 mt-4 transition-colors underline decoration-slate-700 hover:decoration-fuchsia-400"
                       >
                         Problemas com a câmera? Entrar com PIN
@@ -2130,7 +2141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                       <button 
                         type="button"
-                        onClick={() => setShowPinLogin(false)}
+                        onClick={() => { setShowPinLogin(false); startCamera(); }}
                         className="w-full text-center text-xs text-slate-500 hover:text-fuchsia-400 mt-4 transition-colors"
                       >
                         Voltar para Biometria
