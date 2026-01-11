@@ -1,0 +1,7 @@
+{
+  "name": "NexusWork Portal ponto",
+  "description": "A futuristic dark-tech portal for companies and employees.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

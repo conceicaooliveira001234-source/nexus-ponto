@@ -1,0 +1,2291 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
+  Users, Settings, Plus, Save, Trash2, FileText, User,
+  Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut
+} from 'lucide-react';
+import TechBackground from './TechBackground';
+import TechInput from './ui/TechInput';
+import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord } from '../types';
+import { db } from '../lib/firebase';
+import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import * as faceapi from 'face-api.js';
+import { getCurrentPosition, isWithinRadius, calculateDistance } from '../lib/geolocation';
+
+interface DashboardProps {
+  role: UserRole;
+  onBack: () => void;
+  currentCompanyId?: string;
+  employeeContext?: EmployeeContext | null;
+}
+
+type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SETTINGS';
+type EmployeeSubTab = 'REGISTER' | 'LIST';
+
+const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext }) => {
+  const isCompany = role === UserRole.COMPANY;
+  const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
+  
+  // -- State for Company Management --
+  const [companyName, setCompanyName] = useState('NEXUS ADMIN'); // Default placeholder
+  const [locations, setLocations] = useState<ServiceLocation[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+
+  // -- Settings State --
+  const [tenantCode, setTenantCode] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isEditingSettings, setIsEditingSettings] = useState(true); // Default to true (create mode)
+
+  // -- Employee View States --
+  const [employeeSubTab, setEmployeeSubTab] = useState<EmployeeSubTab>('REGISTER');
+  const [activeLocationTab, setActiveLocationTab] = useState<string>('');
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false); // New state to lock submit
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null); // Track if editing
+
+  // Form States
+  const [newLocation, setNewLocation] = useState<{
+    name: string;
+    address: string;
+    latitude: string;
+    longitude: string;
+    radius: string;
+  }>({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+  
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  const initialEmployeeState = {
+    name: '', cpf: '', role: '', whatsapp: '', 
+    shift: 'Diurno', entryTime: '', breakTime: '', exitTime: '', locationId: '', photoBase64: '', pin: ''
+  };
+
+  const [newEmployee, setNewEmployee] = useState(initialEmployeeState);
+
+  // -- Biometric / Employee Dashboard State --
+  const [isBiometricVerified, setIsBiometricVerified] = useState(false);
+  const [identifiedEmployee, setIdentifiedEmployee] = useState<Employee | null>(null);
+  const [cpfForLogin, setCpfForLogin] = useState(''); // Used ONLY for PIN fallback now
+  const [pinForLogin, setPinForLogin] = useState('');
+  const [showPinLogin, setShowPinLogin] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState('');
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // -- Camera Capture States (for Employee Registration) --
+  const [showCameraCapture, setShowCameraCapture] = useState(false);
+  const [isCaptureReady, setIsCaptureReady] = useState(false);
+  const [faceDetected, setFaceDetected] = useState<boolean | null>(null);
+  const [isValidatingFace, setIsValidatingFace] = useState(false);
+  const captureVideoRef = useRef<HTMLVideoElement>(null);
+  const captureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const captureStreamRef = useRef<MediaStream | null>(null);
+
+  // -- Attendance (Registro de Ponto) States --
+  const [showAttendanceFlow, setShowAttendanceFlow] = useState(false);
+  const [attendanceType, setAttendanceType] = useState<AttendanceType | null>(null);
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
+  const [locationVerified, setLocationVerified] = useState(false);
+  const [currentPosition, setCurrentPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [isRegisteringAttendance, setIsRegisteringAttendance] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<ServiceLocation | null>(null);
+  
+  // -- Attendance History States --
+  const [showHistoryView, setShowHistoryView] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('today');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [filteredRecords, setFilteredRecords] = useState<AttendanceRecord[]>([]);
+
+  // -- Load Face API Models (for both Company and Employee) --
+  useEffect(() => {
+    const loadModels = async () => {
+      const MODEL_URL = '/models';
+      console.log('🔄 Iniciando carregamento dos modelos face-api.js...');
+      console.log('📁 Caminho dos modelos:', MODEL_URL);
+      
+      try {
+        console.log('⏳ Carregando SSD MobileNet v1 (detecção de rostos)...');
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        console.log('✅ SSD MobileNet v1 carregado');
+        
+        console.log('⏳ Carregando Face Landmark 68 (pontos faciais)...');
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        console.log('✅ Face Landmark 68 carregado');
+        
+        console.log('⏳ Carregando Face Recognition (reconhecimento)...');
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        console.log('✅ Face Recognition carregado');
+        
+        setModelsLoaded(true);
+        console.log('🎉 Todos os modelos carregados com sucesso!');
+      } catch (err) {
+        console.error('❌ Erro ao carregar modelos face-api.js:', err);
+        console.error('💡 Verifique se os arquivos estão em /public/models/');
+        setScanMessage("Erro ao carregar modelos de IA. Verifique os arquivos.");
+      }
+    };
+    // Load models for both Company (registration) and Employee (login)
+    if (employeeContext || isCompany) {
+       loadModels();
+    }
+  }, [employeeContext, isCompany]);
+
+  // -- Data Listeners & Fetchers --
+  useEffect(() => {
+    if (!currentCompanyId) return;
+    
+    setIsLoadingData(true);
+
+    // 0. Fetch Company Settings
+    const fetchSettings = async () => {
+      try {
+        const docRef = doc(db, "companies", currentCompanyId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as CompanyData;
+          if (data.companyName) setCompanyName(data.companyName);
+          if (data.tenantCode) {
+            setTenantCode(data.tenantCode);
+            setIsEditingSettings(false);
+          } else {
+            setIsEditingSettings(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching settings:", error);
+      }
+    };
+    fetchSettings();
+
+    // 1. Listen for Locations
+    const locationsRef = collection(db, "locations");
+    const qLocations = query(locationsRef, where("companyId", "==", currentCompanyId));
+    
+    const unsubLocations = onSnapshot(qLocations, (snapshot) => {
+      const locs: ServiceLocation[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as ServiceLocation));
+      setLocations(locs);
+      // Determine active tab for company view
+      if (isCompany && locs.length > 0 && !activeLocationTab) {
+        setActiveLocationTab(locs[0].id);
+      }
+    });
+
+    // 2. Listen for Employees (Fetch for BOTH roles now, so Employee Login has reference photos)
+    const employeesRef = collection(db, "employees");
+    const qEmployees = query(employeesRef, where("companyId", "==", currentCompanyId));
+
+    const unsubEmployees = onSnapshot(qEmployees, (snapshot) => {
+      const emps: Employee[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Employee));
+      setEmployees(emps);
+      setIsLoadingData(false);
+    });
+
+    return () => {
+      unsubLocations();
+      unsubEmployees();
+    };
+  }, [isCompany, currentCompanyId]);
+
+  // -- Camera Lifecycle Effect --
+  useEffect(() => {
+    let isActive = true;
+    let stream: MediaStream | null = null;
+
+    const initCamera = async () => {
+      if (cameraActive) {
+        setScanMessage(modelsLoaded ? 'Aguardando câmera...' : 'Carregando modelos...');
+        console.log('📷 Iniciando câmera para login facial...');
+        
+        try {
+          // Try user facing mode first
+          let mediaStream: MediaStream;
+          try {
+            console.log('🔍 Tentando acessar câmera frontal...');
+            mediaStream = await navigator.mediaDevices.getUserMedia({ 
+              video: { facingMode: "user" } 
+            });
+            console.log('✅ Câmera frontal acessada');
+          } catch (err) {
+            console.warn("⚠️ Câmera frontal não encontrada, tentando câmera padrão...", err);
+            // Fallback to any video device
+            mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            console.log('✅ Câmera padrão acessada');
+          }
+          
+          if (!isActive) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            return;
+          }
+
+          stream = mediaStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = mediaStream;
+            setScanMessage('Posicione o rosto no centro...');
+            console.log('✅ Câmera pronta para identificação');
+          }
+        } catch (err: any) {
+          console.error("❌ Erro ao acessar câmera:", err);
+          console.error("Tipo de erro:", err.name);
+          
+          if (isActive) {
+             let message = "Erro ao acessar câmera. Verifique se você permitiu o acesso.";
+             if (err.name === 'NotAllowedError') {
+               message = "⛔ Permissão de câmera negada. Clique no ícone de cadeado/câmera na barra de endereço e permita o acesso.";
+             } else if (err.name === 'NotFoundError') {
+               message = "📷 Nenhuma câmera encontrada no dispositivo.";
+             } else if (err.name === 'NotReadableError') {
+               message = "🔒 Câmera em uso por outro aplicativo. Feche outros apps que usam a câmera.";
+             }
+             alert(message);
+             setCameraActive(false);
+          }
+        }
+      }
+    };
+
+    if (cameraActive) {
+      initCamera();
+    }
+
+    return () => {
+      isActive = false;
+      if (stream) {
+        console.log('🔌 Desligando câmera...');
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraActive, modelsLoaded]);
+
+  // -- Auto-Recognition for Login (Employee Identification) --
+  useEffect(() => {
+    let loginRecognitionInterval: NodeJS.Timeout | null = null;
+
+    // 🔥 Reconhecimento automático para LOGIN
+    if (cameraActive && modelsLoaded && !isBiometricVerified && !showAttendanceFlow && videoRef.current) {
+      console.log('🤖 Iniciando reconhecimento automático para LOGIN...');
+      setScanMessage('🔍 Reconhecendo automaticamente...');
+      
+      // Aguardar 1 segundo para câmera estabilizar
+      const startDelay = setTimeout(() => {
+        loginRecognitionInterval = setInterval(() => {
+          if (!isScanning && !isBiometricVerified) {
+            console.log('🔄 Tentando identificar funcionário automaticamente...');
+            identifyEmployee();
+          }
+        }, 2500); // A cada 2.5 segundos
+      }, 1000);
+
+      return () => {
+        clearTimeout(startDelay);
+        if (loginRecognitionInterval) {
+          console.log('🛑 Parando reconhecimento automático de login...');
+          clearInterval(loginRecognitionInterval);
+        }
+      };
+    }
+  }, [cameraActive, modelsLoaded, isBiometricVerified, isScanning, showAttendanceFlow]);
+
+  // -- Auto-Recognition for Attendance Flow --
+  useEffect(() => {
+    let attendanceRecognitionInterval: NodeJS.Timeout | null = null;
+
+    // 🔥 Reconhecimento automático durante registro de ponto
+    if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee && videoRef.current) {
+      console.log('🤖 Iniciando reconhecimento automático para registro de ponto...');
+      console.log('👤 Funcionário logado:', identifiedEmployee.name);
+      
+      // Aguardar 1 segundo para câmera estabilizar
+      const startDelay = setTimeout(() => {
+        attendanceRecognitionInterval = setInterval(() => {
+          if (!isScanning && !isRegisteringAttendance) {
+            console.log('🔄 Tentando reconhecer e registrar automaticamente...');
+            autoRecognizeAndRegister();
+          }
+        }, 2500); // A cada 2.5 segundos
+      }, 1000);
+
+      return () => {
+        clearTimeout(startDelay);
+        if (attendanceRecognitionInterval) {
+          console.log('🛑 Parando reconhecimento automático de ponto...');
+          clearInterval(attendanceRecognitionInterval);
+        }
+      };
+    }
+  }, [showAttendanceFlow, locationVerified, cameraActive, modelsLoaded, isRegisteringAttendance, isScanning, identifiedEmployee]);
+
+  // -- Load Current Location and Attendance Records (Employee View) --
+  useEffect(() => {
+    if (!employeeContext) return;
+
+    // Load current location details
+    const loadLocation = async () => {
+      try {
+        const locationDoc = await getDoc(doc(db, "locations", employeeContext.locationId));
+        if (locationDoc.exists()) {
+          setCurrentLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
+          console.log('📍 Local de trabalho carregado:', locationDoc.data());
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar local:', error);
+      }
+    };
+
+    loadLocation();
+
+    // Listen for attendance records
+    if (identifiedEmployee) {
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🎧 CONFIGURANDO LISTENER DE REGISTROS DE PONTO');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('👤 Funcionário ID:', identifiedEmployee.id);
+      console.log('👤 Funcionário Nome:', identifiedEmployee.name);
+      console.log('📍 Company ID:', employeeContext?.companyId);
+      console.log('📍 Location ID:', employeeContext?.locationId);
+      
+      const attendanceRef = collection(db, "attendance");
+      const qAttendance = query(
+        attendanceRef,
+        where("employeeId", "==", identifiedEmployee.id),
+        orderBy("timestamp", "desc"),
+        limit(10)
+      );
+
+      console.log('🔍 Query configurada:');
+      console.log('   - Collection: attendance');
+      console.log('   - Where: employeeId ==', identifiedEmployee.id);
+      console.log('   - OrderBy: timestamp DESC');
+      console.log('   - Limit: 10');
+      console.log('⏳ Aguardando eventos do Firestore...');
+      console.log('═══════════════════════════════════════════════════════');
+
+      const unsubAttendance = onSnapshot(
+        qAttendance, 
+        (snapshot) => {
+          console.log('═══════════════════════════════════════════════════════');
+          console.log('🔔 LISTENER ACIONADO! Snapshot recebido do Firestore');
+          console.log('═══════════════════════════════════════════════════════');
+          console.log('📊 Número de documentos no snapshot:', snapshot.docs.length);
+          console.log('📊 Snapshot vazio?', snapshot.empty);
+          console.log('📊 Metadados:', {
+            hasPendingWrites: snapshot.metadata.hasPendingWrites,
+            fromCache: snapshot.metadata.fromCache
+          });
+          
+          if (snapshot.docs.length > 0) {
+            console.log('📄 Documentos recebidos:');
+            snapshot.docs.forEach((doc, index) => {
+              const data = doc.data();
+              console.log(`   ${index + 1}. ID: ${doc.id}`);
+              console.log(`      - employeeId: ${data.employeeId}`);
+              console.log(`      - employeeName: ${data.employeeName}`);
+              console.log(`      - type: ${data.type}`);
+              console.log(`      - timestamp: ${data.timestamp?.toDate?.()?.toLocaleString('pt-BR') || 'N/A'}`);
+            });
+          } else {
+            console.warn('⚠️ Nenhum documento encontrado no snapshot!');
+            console.log('💡 Possíveis causas:');
+            console.log('   1. Nenhum registro foi salvo ainda');
+            console.log('   2. O employeeId não corresponde');
+            console.log('   3. Falta índice composto no Firestore');
+            console.log('   4. As regras do Firestore estão bloqueando a leitura');
+          }
+          
+          const records: AttendanceRecord[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate() || new Date()
+            } as AttendanceRecord;
+          });
+          
+          setAttendanceRecords(records);
+          console.log(`✅ Estado atualizado: ${records.length} registros de ponto carregados`);
+          console.log('═══════════════════════════════════════════════════════');
+        },
+        (error) => {
+          console.log('═══════════════════════════════════════════════════════');
+          console.error('❌❌❌ ERRO NO LISTENER DE ATTENDANCE ❌❌❌');
+          console.log('═══════════════════════════════════════════════════════');
+          console.error('🔴 Tipo do erro:', error?.name || 'Desconhecido');
+          console.error('🔴 Mensagem:', error?.message || 'Sem mensagem');
+          console.error('🔴 Código:', error?.code || 'Sem código');
+          console.error('🔴 Objeto completo:', error);
+          
+          if (error?.code === 'failed-precondition') {
+            console.error('💡 SOLUÇÃO: Crie um índice composto no Firestore!');
+            console.error('   1. Acesse: https://console.firebase.google.com/');
+            console.error('   2. Vá em Firestore Database > Indexes');
+            console.error('   3. Crie um índice composto:');
+            console.error('      - Collection: attendance');
+            console.error('      - Fields: employeeId (Ascending), timestamp (Descending)');
+          } else if (error?.code === 'permission-denied') {
+            console.error('💡 SOLUÇÃO: Verifique as regras do Firestore!');
+            console.error('   - A collection "attendance" precisa permitir leitura');
+          }
+          console.log('═══════════════════════════════════════════════════════');
+        }
+      );
+
+      return () => {
+        console.log('🔌 Desconectando listener de attendance records');
+        unsubAttendance();
+      };
+    }
+  }, [employeeContext, identifiedEmployee]);
+
+  // -- Handlers --
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isEditingSettings) {
+      setIsEditingSettings(true);
+      return;
+    }
+    if (!currentCompanyId) return;
+    if (!tenantCode.trim()) {
+      alert("Por favor, crie um código para sua empresa.");
+      return;
+    }
+    setIsSavingSettings(true);
+    try {
+      const docRef = doc(db, "companies", currentCompanyId);
+      await updateDoc(docRef, {
+        tenantCode: tenantCode.trim().toUpperCase()
+      });
+      setTenantCode(prev => prev.trim().toUpperCase());
+      alert("Código da empresa salvo com sucesso!");
+      setIsEditingSettings(false); 
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      alert("Erro ao salvar configurações.");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocalização não é suportada pelo seu navegador.");
+      return;
+    }
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setNewLocation(prev => ({
+          ...prev,
+          latitude: lat.toFixed(6),
+          longitude: lng.toFixed(6)
+        }));
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+          const data = await response.json();
+          if (data && data.address) {
+            const addr = data.address;
+            const fullAddress = [
+              (addr.road || addr.street || ''),
+              (addr.house_number || ''),
+              (addr.suburb || addr.neighbourhood || ''),
+              (addr.city || addr.town || ''),
+              (addr.state || '')
+            ].filter(Boolean).join(', ');
+            setNewLocation(prev => ({ ...prev, address: fullAddress || data.display_name }));
+          }
+        } catch (error) {
+          console.error("Erro ao buscar endereço:", error);
+        } finally {
+          setIsGettingLocation(false);
+        }
+      },
+      (error) => {
+        console.error(error);
+        alert("Erro ao obter localização. Verifique as permissões.");
+        setIsGettingLocation(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleAddLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLocation.name || !newLocation.latitude || !newLocation.longitude) {
+      alert("Nome e Coordenadas são obrigatórios.");
+      return;
+    }
+    try {
+      await addDoc(collection(db, "locations"), {
+        companyId: currentCompanyId,
+        name: newLocation.name,
+        address: newLocation.address,
+        latitude: parseFloat(newLocation.latitude),
+        longitude: parseFloat(newLocation.longitude),
+        radius: parseInt(newLocation.radius) || 100
+      });
+      setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+    } catch (error) {
+      console.error("Error adding location: ", error);
+      alert("Erro ao salvar local.");
+    }
+  };
+
+  const handleDeleteLocation = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "locations", id));
+    } catch (error) {
+      console.error("Error deleting location:", error);
+    }
+  };
+
+  // ADD or UPDATE Employee
+  const handleSaveEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmployee.name || !newEmployee.locationId) {
+      alert("Preencha o nome e selecione um local.");
+      return;
+    }
+    if (isProcessingPhoto) {
+      alert("Aguarde o processamento da foto.");
+      return;
+    }
+    if (!newEmployee.photoBase64) {
+      alert("É obrigatório enviar uma foto para o reconhecimento facial.");
+      return;
+    }
+    if (!newEmployee.pin || newEmployee.pin.length < 4) {
+      alert("Defina um PIN de pelo menos 4 dígitos.");
+      return;
+    }
+    
+    try {
+      if (editingEmployeeId) {
+        // UPDATE
+        await updateDoc(doc(db, "employees", editingEmployeeId), {
+          ...newEmployee
+        });
+        alert("Funcionário atualizado com sucesso!");
+        setEditingEmployeeId(null);
+      } else {
+        // CREATE
+        await addDoc(collection(db, "employees"), {
+          companyId: currentCompanyId,
+          ...newEmployee
+        });
+        alert("Funcionário cadastrado com sucesso!");
+      }
+
+      setNewEmployee(initialEmployeeState);
+      // Optional: switch back to list if editing
+      if (editingEmployeeId) setEmployeeSubTab('LIST');
+      
+    } catch (error) {
+       console.error("Error saving employee: ", error);
+       alert("Erro ao salvar funcionário.");
+    }
+  };
+
+  const handleEditEmployee = (emp: Employee) => {
+    setEditingEmployeeId(emp.id);
+    setNewEmployee({
+      name: emp.name,
+      cpf: emp.cpf,
+      role: emp.role,
+      whatsapp: emp.whatsapp,
+      shift: emp.shift,
+      entryTime: emp.entryTime,
+      breakTime: emp.breakTime,
+      exitTime: emp.exitTime,
+      locationId: emp.locationId,
+      photoBase64: emp.photoBase64 || '',
+      pin: emp.pin || ''
+    });
+    setEmployeeSubTab('REGISTER');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEmployeeId(null);
+    setNewEmployee(initialEmployeeState);
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (window.confirm("Tem certeza que deseja DELETAR este funcionário? Essa ação não pode ser desfeita.")) {
+      try {
+        await deleteDoc(doc(db, "employees", id));
+      } catch (error) {
+        console.error("Error deleting employee:", error);
+        alert("Erro ao remover funcionário.");
+      }
+    }
+  };
+
+  const maskCPF = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+      .replace(/(-\d{2})\d+?$/, '$1');
+  };
+
+  // -- CAMERA CAPTURE FUNCTIONS (for Employee Registration) --
+  const FACE_DETECTION_INTERVAL_MS = 1000;
+
+  const startCaptureCamera = async () => {
+    setShowCameraCapture(true);
+    setFaceDetected(null);
+    setIsCaptureReady(false);
+    setIsValidatingFace(false);
+    
+    console.log('📷 Iniciando câmera para cadastro facial...');
+    
+    try {
+      let mediaStream: MediaStream;
+      try {
+        console.log('🔍 Tentando acessar câmera frontal...');
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
+        });
+        console.log('✅ Câmera frontal acessada com sucesso');
+      } catch (err) {
+        console.warn("⚠️ Câmera frontal não encontrada, tentando câmera padrão...", err);
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        console.log('✅ Câmera padrão acessada com sucesso');
+      }
+      
+      captureStreamRef.current = mediaStream;
+      
+      if (captureVideoRef.current) {
+        captureVideoRef.current.srcObject = mediaStream;
+        captureVideoRef.current.onloadedmetadata = () => {
+          console.log('✅ Vídeo carregado e pronto para captura');
+          setIsCaptureReady(true);
+        };
+      }
+    } catch (err: any) {
+      console.error("❌ Erro ao acessar câmera:", err);
+      console.error("Tipo de erro:", err.name);
+      
+      let message = "Erro ao acessar câmera.";
+      if (err.name === 'NotAllowedError') {
+        message = "⛔ Permissão de câmera negada. Por favor, permita o acesso nas configurações do navegador.";
+        console.error("💡 Dica: Clique no ícone de cadeado/câmera na barra de endereço e permita o acesso");
+      } else if (err.name === 'NotFoundError') {
+        message = "📷 Nenhuma câmera encontrada no dispositivo.";
+        console.error("💡 Dica: Verifique se há uma câmera conectada ao dispositivo");
+      } else if (err.name === 'NotReadableError') {
+        message = "🔒 Câmera em uso por outro aplicativo.";
+        console.error("💡 Dica: Feche outros aplicativos que possam estar usando a câmera");
+      }
+      
+      alert(message);
+      setShowCameraCapture(false);
+      setIsCaptureReady(false);
+    }
+  };
+
+  const stopCaptureCamera = () => {
+    if (captureStreamRef.current) {
+      captureStreamRef.current.getTracks().forEach(track => track.stop());
+      captureStreamRef.current = null;
+    }
+    setShowCameraCapture(false);
+    setIsCaptureReady(false);
+    setFaceDetected(null);
+    setIsValidatingFace(false);
+  };
+
+  const detectFaceInVideo = useCallback(async () => {
+    if (!captureVideoRef.current || !modelsLoaded) return;
+    
+    setIsValidatingFace(true);
+    try {
+      const detection = await faceapi.detectSingleFace(captureVideoRef.current).withFaceLandmarks();
+      const faceFound = !!detection;
+      setFaceDetected(faceFound);
+      
+      if (faceFound && detection) {
+        console.log('✅ Rosto detectado no preview (confiança:', detection.detection.score.toFixed(3), ')');
+      }
+    } catch (err) {
+      console.error("❌ Erro na detecção de face:", err);
+      setFaceDetected(false);
+    } finally {
+      setIsValidatingFace(false);
+    }
+  }, [modelsLoaded]);
+
+  // Auto-detect face while camera is active
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (showCameraCapture && isCaptureReady && modelsLoaded) {
+      interval = setInterval(detectFaceInVideo, FACE_DETECTION_INTERVAL_MS);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showCameraCapture, isCaptureReady, modelsLoaded, detectFaceInVideo]);
+
+  // Cleanup camera when switching tabs
+  useEffect(() => {
+    if (activeTab !== 'EMPLOYEES' || employeeSubTab !== 'REGISTER') {
+      if (captureStreamRef.current) {
+        captureStreamRef.current.getTracks().forEach(track => track.stop());
+        captureStreamRef.current = null;
+      }
+      setShowCameraCapture(false);
+      setIsCaptureReady(false);
+      setFaceDetected(null);
+      setIsValidatingFace(false);
+    }
+  }, [activeTab, employeeSubTab]);
+
+  const capturePhotoFromCamera = async () => {
+    if (!captureVideoRef.current || !captureCanvasRef.current) return;
+    
+    setIsProcessingPhoto(true);
+    console.log('📸 Iniciando captura de foto...');
+    
+    try {
+      const video = captureVideoRef.current;
+      const canvas = captureCanvasRef.current;
+      
+      // Set canvas size to match video
+      const MAX_SIZE = 300;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+      
+      console.log(`📐 Dimensões originais do vídeo: ${width}x${height}`);
+      
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height = Math.round(height * MAX_SIZE / width);
+          width = MAX_SIZE;
+        }
+      } else {
+        if (height > MAX_SIZE) {
+          width = Math.round(width * MAX_SIZE / height);
+          height = MAX_SIZE;
+        }
+      }
+      
+      console.log(`📐 Dimensões redimensionadas: ${width}x${height}`);
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Draw image without flipping (natural orientation)
+        ctx.drawImage(video, 0, 0, width, height);
+      }
+      
+      console.log('🔍 Validando rosto na imagem capturada...');
+      
+      // Validate face in captured image
+      const detection = await faceapi.detectSingleFace(canvas).withFaceLandmarks().withFaceDescriptor();
+      
+      if (!detection) {
+        console.warn('⚠️ Nenhum rosto detectado na foto capturada');
+        alert("Nenhum rosto detectado na foto. Posicione seu rosto corretamente e tente novamente.");
+        setIsProcessingPhoto(false);
+        return;
+      }
+      
+      console.log('✅ Rosto detectado com sucesso!');
+      console.log('📊 Confiança da detecção:', detection.detection.score);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      setNewEmployee(prev => ({ ...prev, photoBase64: dataUrl }));
+      
+      console.log('💾 Foto salva no estado do funcionário');
+      
+      // Stop camera after successful capture
+      stopCaptureCamera();
+      
+    } catch (error) {
+      console.error('❌ Erro ao capturar foto:', error);
+      alert('Erro ao capturar a foto. Tente novamente.');
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
+  // Cleanup camera on unmount or when leaving employee tab
+  useEffect(() => {
+    return () => {
+      if (captureStreamRef.current) {
+        captureStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // -- BIOMETRIC LOGIC --
+
+  const startCamera = () => {
+    setCameraActive(true);
+  };
+
+  const stopCamera = () => {
+    setCameraActive(false);
+  };
+
+  const handlePinLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cpfForLogin || !pinForLogin) {
+      alert("CPF e PIN são obrigatórios.");
+      return;
+    }
+    
+    setIsScanning(true);
+    try {
+      // Find employee by CPF
+      const found = employees.find(e => 
+        e.cpf === cpfForLogin && e.locationId === employeeContext?.locationId
+      );
+
+      if (!found) throw new Error("CPF não encontrado neste local.");
+
+      if (found.pin === pinForLogin) {
+         setIdentifiedEmployee(found);
+         setIsBiometricVerified(true);
+      } else {
+         alert("PIN incorreto.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Erro ao validar PIN.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Helper to load image for Face API
+  const loadImage = (src: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = src;
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+    });
+  };
+
+  const identifyEmployee = async () => {
+    if (!videoRef.current || !canvasRef.current || !employeeContext) return;
+    
+    if (!modelsLoaded) {
+      alert("Aguarde os modelos de reconhecimento carregarem.");
+      return;
+    }
+
+    setIsScanning(true);
+    setScanMessage('Processando imagem...');
+    console.log('🔐 Iniciando identificação facial...');
+
+    try {
+      // 1. Detect face in video
+      const videoEl = videoRef.current;
+      console.log('🔍 Detectando rosto no vídeo...');
+      const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
+
+      if (!detection) {
+        console.warn('⚠️ Nenhum rosto detectado no vídeo');
+        setScanMessage('Nenhum rosto detectado. Ajuste a posição.');
+        setIsScanning(false);
+        return;
+      }
+
+      console.log('✅ Rosto detectado no vídeo');
+      console.log('📊 Confiança da detecção:', detection.detection.score);
+
+      // 2. Get Candidates for THIS location
+      const candidates = employees.filter(e => e.locationId === employeeContext.locationId && e.photoBase64);
+
+      console.log(`👥 Encontrados ${candidates.length} funcionários cadastrados neste local`);
+
+      if (candidates.length === 0) {
+        throw new Error("Nenhum funcionário com foto cadastrado neste local.");
+      }
+
+      // 3. Match against candidates
+      setScanMessage('Comparando biométrias...');
+      console.log('🔄 Comparando com funcionários cadastrados...');
+      
+      // Threshold ajustado: 0.55 para melhor precisão (quanto menor, mais restritivo)
+      const RECOGNITION_THRESHOLD = 0.55;
+      let bestMatch: { distance: number; employee: Employee | null } = { distance: RECOGNITION_THRESHOLD, employee: null };
+
+      for (const candidate of candidates) {
+        if (!candidate.photoBase64) continue;
+        
+        try {
+          console.log(`🔍 Comparando com: ${candidate.name}`);
+          const img = await loadImage(candidate.photoBase64);
+          const candidateDetection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+          
+          if (candidateDetection) {
+            const distance = faceapi.euclideanDistance(detection.descriptor, candidateDetection.descriptor);
+            console.log(`📏 Distância euclidiana para ${candidate.name}: ${distance.toFixed(4)}`);
+            
+            if (distance < bestMatch.distance) {
+              console.log(`✨ Novo melhor match encontrado: ${candidate.name} (distância: ${distance.toFixed(4)})`);
+              bestMatch = { distance, employee: candidate };
+            }
+          } else {
+            console.warn(`⚠️ Não foi possível detectar rosto na foto de ${candidate.name}`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ Erro ao processar candidato ${candidate.name}:`, e);
+        }
+      }
+
+      if (bestMatch.employee) {
+        console.log(`🎉 Funcionário identificado: ${bestMatch.employee.name}`);
+        console.log(`📊 Distância final: ${bestMatch.distance.toFixed(4)} (threshold: ${RECOGNITION_THRESHOLD})`);
+        setIdentifiedEmployee(bestMatch.employee);
+        setIsBiometricVerified(true);
+        setScanMessage('Identificação bem-sucedida!');
+        
+        // NÃO registrar automaticamente - deixar o usuário confirmar no modal
+        console.log('✅ Identificação concluída. Aguardando confirmação do usuário para registrar ponto.');
+      } else {
+        console.warn('❌ Nenhum funcionário reconhecido (distância acima do threshold)');
+        setScanMessage('Rosto não reconhecido. Tente novamente.');
+      }
+
+    } catch (err: any) {
+      console.error('❌ Erro na identificação:', err);
+      alert(err.message || "Erro na identificação.");
+      setScanMessage('Erro. Tente novamente.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // -- Attendance (Registro de Ponto) Functions --
+
+  const startAttendanceFlow = async (type: AttendanceType) => {
+    if (!employeeContext || !currentLocation || !identifiedEmployee) return;
+
+    console.log(`⏰ Iniciando registro de ponto: ${type}`);
+    setAttendanceType(type);
+    setShowAttendanceFlow(true);
+    setLocationVerified(false);
+    setIsCheckingLocation(true);
+
+    try {
+      // Step 1: Verificar localização
+      console.log('📍 Verificando localização do funcionário...');
+      const position = await getCurrentPosition();
+      setCurrentPosition(position);
+
+      const withinRadius = isWithinRadius(
+        position.latitude,
+        position.longitude,
+        currentLocation.latitude,
+        currentLocation.longitude,
+        currentLocation.radius
+      );
+
+      if (!withinRadius) {
+        console.warn('⚠️ Funcionário fora do raio permitido');
+        alert(`❌ Você não está no local de trabalho.\n\nVocê precisa estar dentro de um raio de ${currentLocation.radius}m do local para registrar o ponto.`);
+        setShowAttendanceFlow(false);
+        setIsCheckingLocation(false);
+        return;
+      }
+
+      console.log('✅ Funcionário dentro do raio permitido');
+      setLocationVerified(true);
+      setIsCheckingLocation(false);
+
+      // Step 2: Abrir câmera para reconhecimento facial
+      console.log('📷 Abrindo câmera para reconhecimento facial...');
+      setCameraActive(true);
+
+    } catch (error: any) {
+      console.error('❌ Erro ao verificar localização:', error);
+      alert(error.message || 'Erro ao verificar localização. Tente novamente.');
+      setShowAttendanceFlow(false);
+      setIsCheckingLocation(false);
+    }
+  };
+
+  const registerAttendance = async () => {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 INICIANDO PROCESSO DE REGISTRO DE PONTO');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    // ETAPA 1: VALIDAÇÃO DE DADOS OBRIGATÓRIOS
+    console.log('📋 ETAPA 1: Validando dados obrigatórios...');
+    console.log('📊 Estado atual completo:', {
+      attendanceType,
+      identifiedEmployee: identifiedEmployee ? {
+        id: identifiedEmployee.id,
+        name: identifiedEmployee.name,
+        role: identifiedEmployee.role
+      } : null,
+      employeeContext: employeeContext ? {
+        companyId: employeeContext.companyId,
+        companyName: employeeContext.companyName,
+        locationId: employeeContext.locationId,
+        locationName: employeeContext.locationName
+      } : null,
+      currentPosition,
+      currentLocation: currentLocation ? {
+        id: currentLocation.id,
+        name: currentLocation.name,
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        radius: currentLocation.radius
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+
+    // Validações individuais com logs específicos
+    if (!attendanceType) {
+      console.error('❌ ERRO DE VALIDAÇÃO: Tipo de ponto não definido');
+      alert('❌ Erro: Tipo de ponto não definido. Tente novamente.');
+      return;
+    }
+    console.log('✅ Tipo de ponto validado:', attendanceType);
+
+    if (!identifiedEmployee) {
+      console.error('❌ ERRO DE VALIDAÇÃO: Funcionário não identificado');
+      alert('❌ Erro: Funcionário não identificado. Faça a identificação facial primeiro.');
+      return;
+    }
+    console.log('✅ Funcionário validado:', identifiedEmployee.name, '(ID:', identifiedEmployee.id, ')');
+
+    if (!employeeContext) {
+      console.error('❌ ERRO DE VALIDAÇÃO: Contexto do funcionário não encontrado');
+      alert('❌ Erro: Contexto do funcionário não encontrado.');
+      return;
+    }
+    console.log('✅ Contexto validado - Empresa:', employeeContext.companyName, '| Local:', employeeContext.locationName);
+
+    if (!currentPosition) {
+      console.error('❌ ERRO DE VALIDAÇÃO: Posição atual não obtida');
+      alert('❌ Erro: Não foi possível obter sua localização.');
+      return;
+    }
+    console.log('✅ Posição validada - Lat:', currentPosition.latitude, '| Lng:', currentPosition.longitude);
+
+    if (!currentLocation) {
+      console.error('❌ ERRO DE VALIDAÇÃO: Local de trabalho não carregado');
+      alert('❌ Erro: Local de trabalho não carregado.');
+      return;
+    }
+    console.log('✅ Local de trabalho validado:', currentLocation.name);
+
+    console.log('✅ TODAS AS VALIDAÇÕES PASSARAM!');
+    console.log('───────────────────────────────────────────────────────');
+
+    setIsRegisteringAttendance(true);
+    console.log(`💾 ETAPA 2: Iniciando registro de ponto do tipo: ${attendanceType}`);
+
+    try {
+      // ETAPA 3: CAPTURA DE FOTO DO VÍDEO
+      console.log('📸 ETAPA 3: Capturando foto do vídeo...');
+      let photoBase64 = '';
+      
+      if (videoRef.current && canvasRef.current) {
+        console.log('📹 Referências de vídeo e canvas encontradas');
+        const canvas = canvasRef.current;
+        const video = videoRef.current;
+        
+        console.log('📐 Dimensões do vídeo:', {
+          width: video.videoWidth,
+          height: video.videoHeight,
+          readyState: video.readyState
+        });
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0);
+          photoBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          console.log('✅ Foto capturada com sucesso (tamanho:', photoBase64.length, 'caracteres)');
+        } else {
+          console.warn('⚠️ Não foi possível obter contexto 2D do canvas');
+        }
+      } else {
+        console.warn('⚠️ Referências de vídeo ou canvas não disponíveis');
+        console.log('   videoRef.current:', !!videoRef.current);
+        console.log('   canvasRef.current:', !!canvasRef.current);
+      }
+
+      // ETAPA 4: CÁLCULO DE DISTÂNCIA
+      console.log('📏 ETAPA 4: Calculando distância até o local de trabalho...');
+      const distanceToLocation = calculateDistance(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        currentLocation.latitude,
+        currentLocation.longitude
+      );
+      console.log(`✅ Distância calculada: ${distanceToLocation.toFixed(2)}m do local de trabalho`);
+
+      // ETAPA 5: PREPARAÇÃO DOS DADOS
+      console.log('📦 ETAPA 5: Preparando dados para salvamento...');
+      const now = new Date();
+      
+      const attendanceData: Omit<AttendanceRecord, 'id'> = {
+        employeeId: identifiedEmployee.id,
+        employeeName: identifiedEmployee.name,
+        companyId: employeeContext.companyId,
+        locationId: employeeContext.locationId,
+        locationName: employeeContext.locationName,
+        timestamp: now,
+        type: attendanceType,
+        latitude: currentPosition.latitude,
+        longitude: currentPosition.longitude,
+        photoBase64: photoBase64,
+        verified: true,
+        distance: distanceToLocation
+      };
+
+      console.log('📋 Estrutura do documento a ser salvo:');
+      console.log('   - employeeId:', attendanceData.employeeId);
+      console.log('   - employeeName:', attendanceData.employeeName);
+      console.log('   - companyId:', attendanceData.companyId);
+      console.log('   - locationId:', attendanceData.locationId);
+      console.log('   - locationName:', attendanceData.locationName);
+      console.log('   - timestamp:', attendanceData.timestamp.toISOString());
+      console.log('   - type:', attendanceData.type);
+      console.log('   - latitude:', attendanceData.latitude);
+      console.log('   - longitude:', attendanceData.longitude);
+      console.log('   - photoBase64: [', photoBase64.length, 'caracteres ]');
+      console.log('   - verified:', attendanceData.verified);
+      console.log('   - distance:', attendanceData.distance);
+
+      // ETAPA 6: SALVAMENTO NO FIRESTORE
+      console.log('───────────────────────────────────────────────────────');
+      console.log('💾 ETAPA 6: SALVANDO NO FIRESTORE...');
+      console.log('🔗 Collection: "attendance"');
+      console.log('🗄️ Database:', db ? 'Conectado' : 'NÃO CONECTADO');
+      
+      if (!db) {
+        throw new Error('Firebase Database não está inicializado!');
+      }
+
+      const firestoreData = {
+        ...attendanceData,
+        timestamp: Timestamp.fromDate(attendanceData.timestamp)
+      };
+
+      console.log('📤 Enviando dados para o Firestore...');
+      console.log('⏰ Timestamp convertido:', firestoreData.timestamp);
+      
+      const docRef = await addDoc(collection(db, "attendance"), firestoreData);
+
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅✅✅ PONTO REGISTRADO COM SUCESSO! ✅✅✅');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🆔 ID do documento criado:', docRef.id);
+      console.log('📍 Path completo: attendance/' + docRef.id);
+      console.log('⏰ Horário do registro:', now.toLocaleString('pt-BR'));
+      console.log('👤 Funcionário:', attendanceData.employeeName);
+      console.log('📌 Tipo:', attendanceData.type);
+      console.log('═══════════════════════════════════════════════════════');
+      
+      // ETAPA 7: VERIFICAÇÃO MANUAL - Confirmar que o documento foi salvo
+      console.log('───────────────────────────────────────────────────────');
+      console.log('🔍 ETAPA 7: VERIFICAÇÃO MANUAL DO DOCUMENTO SALVO...');
+      try {
+        const savedDoc = await getDoc(doc(db, "attendance", docRef.id));
+        if (savedDoc.exists()) {
+          console.log('✅ CONFIRMADO: Documento existe no Firestore!');
+          console.log('📄 Dados salvos:', savedDoc.data());
+        } else {
+          console.error('❌ ERRO CRÍTICO: Documento NÃO foi encontrado após salvamento!');
+          throw new Error('Documento não encontrado após salvamento');
+        }
+      } catch (verifyError) {
+        console.error('❌ Erro ao verificar documento:', verifyError);
+      }
+      console.log('───────────────────────────────────────────────────────');
+      
+      // ETAPA 8: REFRESH MANUAL FORÇADO - Atualizar o histórico imediatamente
+      console.log('🔄 ETAPA 8: REFRESH MANUAL DO HISTÓRICO...');
+      try {
+        const attendanceRef = collection(db, "attendance");
+        const qRefresh = query(
+          attendanceRef,
+          where("employeeId", "==", identifiedEmployee.id),
+          orderBy("timestamp", "desc"),
+          limit(10)
+        );
+        
+        console.log('📥 Buscando registros atualizados do Firestore...');
+        const refreshSnapshot = await getDocs(qRefresh);
+        
+        console.log('📊 Registros encontrados na busca manual:', refreshSnapshot.docs.length);
+        
+        const refreshedRecords: AttendanceRecord[] = refreshSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp: data.timestamp?.toDate() || new Date()
+          } as AttendanceRecord;
+        });
+        
+        setAttendanceRecords(refreshedRecords);
+        console.log('✅ Histórico atualizado manualmente com', refreshedRecords.length, 'registros');
+        
+        // Log dos registros atualizados
+        refreshedRecords.forEach((record, index) => {
+          console.log(`   ${index + 1}. ${record.type} - ${record.timestamp.toLocaleString('pt-BR')}`);
+        });
+        
+      } catch (refreshError) {
+        console.error('❌ Erro ao fazer refresh manual:', refreshError);
+      }
+      console.log('───────────────────────────────────────────────────────');
+      
+      // Feedback visual detalhado
+      const typeLabels = {
+        ENTRY: 'Entrada',
+        BREAK_START: 'Início da Pausa',
+        BREAK_END: 'Fim da Pausa',
+        EXIT: 'Saída'
+      };
+
+      alert(`✅ Ponto registrado com sucesso!\n\n` +
+            `Tipo: ${typeLabels[attendanceType]}\n` +
+            `Horário: ${now.toLocaleTimeString('pt-BR')}\n` +
+            `Funcionário: ${attendanceData.employeeName}\n` +
+            `Local: ${attendanceData.locationName}\n` +
+            `Distância: ${distanceToLocation.toFixed(0)}m\n\n` +
+            `ID do Registro: ${docRef.id}\n\n` +
+            `✅ Histórico atualizado automaticamente!`);
+
+      // Limpar estados do fluxo de registro
+      console.log('🧹 Limpando estados do fluxo de registro...');
+      setShowAttendanceFlow(false);
+      setAttendanceType(null);
+      setLocationVerified(false);
+      setCurrentPosition(null);
+      setScanMessage('');
+      stopCamera();
+      console.log('✅ Estados limpos com sucesso');
+      
+      // NÃO resetar isBiometricVerified nem identifiedEmployee - o usuário continua logado
+      console.log('👤 Usuário permanece autenticado');
+
+    } catch (error: any) {
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('❌❌❌ ERRO AO REGISTRAR PONTO ❌❌❌');
+      console.log('═══════════════════════════════════════════════════════');
+      console.error('🔴 Tipo do erro:', error?.name || 'Desconhecido');
+      console.error('🔴 Mensagem:', error?.message || 'Sem mensagem');
+      console.error('🔴 Código:', error?.code || 'Sem código');
+      console.error('🔴 Stack trace:', error?.stack || 'Sem stack');
+      console.error('🔴 Objeto completo do erro:', error);
+      console.log('═══════════════════════════════════════════════════════');
+      
+      // Mensagem de erro específica baseada no tipo
+      let errorMessage = '❌ Erro ao registrar ponto.\n\n';
+      
+      if (error?.code === 'permission-denied') {
+        errorMessage += '🔒 ERRO DE PERMISSÃO:\n' +
+                       'O Firestore está bloqueando a escrita.\n\n' +
+                       'Verifique as regras de segurança no Firebase Console.\n\n' +
+                       'Detalhes técnicos:\n' + error.message;
+        console.error('💡 SOLUÇÃO: Configure as regras do Firestore para permitir escrita na collection "attendance"');
+      } else if (error?.code === 'unavailable') {
+        errorMessage += '🌐 ERRO DE CONEXÃO:\n' +
+                       'Não foi possível conectar ao Firestore.\n\n' +
+                       'Verifique sua conexão com a internet.\n\n' +
+                       'Detalhes: ' + error.message;
+      } else if (error?.message?.includes('Firebase')) {
+        errorMessage += '🔥 ERRO DO FIREBASE:\n' + error.message;
+      } else {
+        errorMessage += 'Detalhes: ' + (error?.message || 'Erro desconhecido');
+      }
+      
+      alert(errorMessage);
+      
+      console.log('📊 Estado do sistema no momento do erro:');
+      console.log('   - Firebase DB conectado:', !!db);
+      console.log('   - Funcionário ID:', identifiedEmployee?.id);
+      console.log('   - Company ID:', employeeContext?.companyId);
+      console.log('   - Location ID:', employeeContext?.locationId);
+      console.log('   - Attendance Type:', attendanceType);
+      
+    } finally {
+      console.log('🏁 Finalizando processo de registro...');
+      setIsRegisteringAttendance(false);
+      console.log('✅ Flag isRegisteringAttendance resetada');
+      console.log('═══════════════════════════════════════════════════════');
+    }
+  };
+
+  const cancelAttendanceFlow = () => {
+    console.log('❌ Fluxo de registro de ponto cancelado');
+    setShowAttendanceFlow(false);
+    setAttendanceType(null);
+    setLocationVerified(false);
+    setCurrentPosition(null);
+    setIsCheckingLocation(false);
+    setScanMessage('');
+    stopCamera();
+    // NÃO resetar isBiometricVerified nem identifiedEmployee - o usuário continua logado
+  };
+
+  // 🔥 NOVO: Função de reconhecimento e registro AUTOMÁTICO
+  const autoRecognizeAndRegister = async () => {
+    if (!videoRef.current || !canvasRef.current || !identifiedEmployee || !modelsLoaded) return;
+    
+    setIsScanning(true);
+    setScanMessage('🔍 Verificando identidade...');
+    console.log('🤖 AUTO-RECONHECIMENTO: Iniciando validação de identidade...');
+
+    try {
+      // 1. Detectar rosto no vídeo
+      const videoEl = videoRef.current;
+      const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
+
+      if (!detection) {
+        console.warn('⚠️ Nenhum rosto detectado no vídeo');
+        setScanMessage('👤 Posicione seu rosto...');
+        setIsScanning(false);
+        return;
+      }
+
+      console.log('✅ Rosto detectado no vídeo (confiança:', detection.detection.score.toFixed(3), ')');
+
+      // 2. Comparar com a foto do funcionário logado (VALIDAÇÃO DE SEGURANÇA)
+      if (!identifiedEmployee.photoBase64) {
+        throw new Error('Funcionário não possui foto cadastrada');
+      }
+
+      console.log('🔐 Validando se é o mesmo funcionário logado:', identifiedEmployee.name);
+      const img = await loadImage(identifiedEmployee.photoBase64);
+      const referenceDetection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+
+      if (!referenceDetection) {
+        throw new Error('Não foi possível processar a foto de referência');
+      }
+
+      // 3. Calcular similaridade
+      const distance = faceapi.euclideanDistance(detection.descriptor, referenceDetection.descriptor);
+      const SECURITY_THRESHOLD = 0.55; // Threshold de segurança
+      
+      console.log(`📊 Distância euclidiana: ${distance.toFixed(4)} (threshold: ${SECURITY_THRESHOLD})`);
+
+      if (distance > SECURITY_THRESHOLD) {
+        console.warn('❌ SEGURANÇA: Rosto detectado NÃO corresponde ao funcionário logado!');
+        setScanMessage('⚠️ Rosto não reconhecido!');
+        alert('❌ ERRO DE SEGURANÇA\n\nO rosto detectado não corresponde ao funcionário logado.\n\nPor favor, certifique-se de que é você quem está registrando o ponto.');
+        setIsScanning(false);
+        return;
+      }
+
+      console.log('✅ SEGURANÇA: Identidade confirmada! É o mesmo funcionário.');
+      setScanMessage('✅ Identidade confirmada! Registrando...');
+
+      // 4. Registrar ponto automaticamente
+      console.log('💾 Registrando ponto automaticamente...');
+      await registerAttendance();
+
+    } catch (err: any) {
+      console.error('❌ Erro no reconhecimento automático:', err);
+      setScanMessage('❌ Erro na verificação');
+      setIsScanning(false);
+    }
+  };
+
+
+  // -- Render Helpers --
+
+  const renderSidebarItem = (tab: Tab, label: string, icon: React.ReactNode) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 font-mono text-sm uppercase tracking-wider ${
+        activeTab === tab 
+          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 
+          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+
+  // -- RENDER: ADMIN DASHBOARD --
+  if (isCompany) {
+    return (
+      <div className="relative min-h-screen flex">
+        <TechBackground />
+        
+        <aside className="relative z-30 w-64 hidden md:flex flex-col border-r border-slate-800 bg-slate-950/80 backdrop-blur-md">
+          <div className="p-6 border-b border-slate-800">
+            <h2 className="font-tech text-xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-white font-bold truncate">
+              {companyName.toUpperCase()}
+            </h2>
+            <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 font-mono">
+              <Lock className="w-3 h-3" /> TENANT ACCESS
+            </div>
+          </div>
+
+          <nav className="flex-1 p-4 space-y-2">
+            {renderSidebarItem('OVERVIEW', 'Visão Geral', <LayoutDashboard className="w-4 h-4" />)}
+            {renderSidebarItem('LOCATIONS', 'Geolocalização', <Globe className="w-4 h-4" />)}
+            {renderSidebarItem('EMPLOYEES', 'Funcionários', <Users className="w-4 h-4" />)}
+            {renderSidebarItem('SETTINGS', 'Configurações', <Settings className="w-4 h-4" />)}
+          </nav>
+
+          <div className="p-4 border-t border-slate-800">
+            <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-mono uppercase">
+              <ArrowLeft className="w-4 h-4" /> Desconectar
+            </button>
+          </div>
+        </aside>
+
+        <main className="relative z-30 flex-1 h-screen overflow-y-auto overflow-x-hidden">
+          {/* Mobile Header */}
+          <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+             <h2 className="font-tech text-lg text-white truncate">{companyName.toUpperCase()}</h2>
+             <button onClick={onBack} className="text-slate-400"><ArrowLeft /></button>
+          </div>
+
+          {/* Mobile Nav */}
+          <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-900 border-b border-slate-800">
+            {/* ... tabs ... */}
+            <button onClick={() => setActiveTab('OVERVIEW')} className={`px-4 py-2 rounded text-xs ${activeTab === 'OVERVIEW' ? 'bg-cyan-600' : 'text-slate-400'}`}>Visão</button>
+            <button onClick={() => setActiveTab('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
+            <button onClick={() => setActiveTab('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
+            <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
+          </div>
+
+          <div className="p-6 md:p-12 max-w-6xl mx-auto">
+            {/* RENDER CONTENT BASED ON TAB */}
+            {activeTab === 'OVERVIEW' && (
+              <div className="space-y-8">
+                 <div className="flex items-center justify-between">
+                    <h3 className="font-tech text-2xl text-white">Detalhamento Geral</h3>
+                    <div className="px-4 py-1 rounded-full bg-cyan-900/30 border border-cyan-500/30 text-cyan-400 text-xs font-mono">TOTAL: {employees.length}</div>
+                 </div>
+                 {/* Existing Roster Logic ... */}
+                 {locations.map(loc => {
+                    const locEmployees = employees.filter(e => e.locationId === loc.id);
+                    if (locEmployees.length === 0) return null;
+                    return (
+                      <div key={loc.id} className="border border-slate-700/50 rounded-xl overflow-hidden bg-slate-900/50">
+                        <div className="p-4 border-b border-slate-700 flex justify-between">
+                          <h4 className="font-bold text-white">{loc.name}</h4>
+                          <span className="text-xs text-slate-400">{locEmployees.length} Colaboradores</span>
+                        </div>
+                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                           {locEmployees.map(emp => (
+                             <div key={emp.id} className="flex items-center gap-3 bg-slate-950/50 p-3 rounded border border-slate-800">
+                                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-slate-600">
+                                  {emp.photoBase64 ? (
+                                    <img src={emp.photoBase64} alt={emp.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <User className="w-6 h-6 m-2 text-slate-500" />
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-sm text-white">{emp.name}</div>
+                                  <div className="text-xs text-cyan-500">{emp.role}</div>
+                                </div>
+                             </div>
+                           ))}
+                        </div>
+                      </div>
+                    );
+                 })}
+              </div>
+            )}
+
+            {activeTab === 'LOCATIONS' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 bg-slate-900/40 border border-slate-700 rounded-xl p-6 h-fit">
+                  <h3 className="font-tech text-lg text-white mb-4 flex items-center gap-2"><Globe className="text-cyan-400 w-5 h-5" /> Novo Ponto</h3>
+                  <form onSubmit={handleAddLocation} className="space-y-4">
+                    <TechInput label="Nome" value={newLocation.name} onChange={e => setNewLocation({...newLocation, name: e.target.value})} required />
+                    <textarea value={newLocation.address} onChange={e => setNewLocation({...newLocation, address: e.target.value})} className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 min-h-[80px]" placeholder={isGettingLocation ? "Buscando..." : "Endereço"} readOnly={isGettingLocation} />
+                    <button type="button" onClick={handleGetLocation} className="text-xs flex items-center gap-1 bg-cyan-900/50 text-cyan-200 px-2 py-1 rounded border border-cyan-700">{isGettingLocation ? <Loader2 className="w-3 h-3 animate-spin"/> : "Pegar Local"}</button>
+                    <div className="grid grid-cols-2 gap-2">
+                       <TechInput label="Lat" value={newLocation.latitude} onChange={e => setNewLocation({...newLocation, latitude: e.target.value})} />
+                       <TechInput label="Lng" value={newLocation.longitude} onChange={e => setNewLocation({...newLocation, longitude: e.target.value})} />
+                    </div>
+                    <TechInput label="Raio (m)" value={newLocation.radius} onChange={e => setNewLocation({...newLocation, radius: e.target.value})} />
+                    <button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-2 rounded-lg font-bold text-sm">SALVAR</button>
+                  </form>
+                </div>
+                <div className="lg:col-span-2 space-y-4">
+                  <h3 className="font-tech text-white">Locais Ativos</h3>
+                  {locations.map(loc => (
+                    <div key={loc.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-lg flex justify-between items-center group relative overflow-hidden">
+                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-500"></div>
+                       <div className="pl-3">
+                         <div className="font-bold text-white">{loc.name}</div>
+                         <div className="text-xs text-slate-500">{loc.address}</div>
+                       </div>
+                       <button onClick={() => handleDeleteLocation(loc.id)} className="p-2 text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'EMPLOYEES' && (
+              <div className="space-y-6">
+                 {/* Sub-menu styled as distinct screens */}
+                 <div className="flex bg-slate-950 p-1.5 rounded-lg border border-slate-800 w-fit gap-1">
+                    <button onClick={() => setEmployeeSubTab('REGISTER')} className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'REGISTER' ? 'bg-slate-800 text-white border border-slate-700 shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
+                       <UserPlus className="w-4 h-4" /> {editingEmployeeId ? 'Editar Funcionário' : 'Cadastro de Funcionário'}
+                    </button>
+                    <button onClick={() => setEmployeeSubTab('LIST')} className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'LIST' ? 'bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
+                       <List className="w-4 h-4" /> Funcionários Cadastrados
+                    </button>
+                 </div>
+                 
+                 {employeeSubTab === 'REGISTER' ? (
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-8 animate-in fade-in zoom-in-95 duration-300">
+                      <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+                        <h3 className="font-tech text-xl text-white flex items-center gap-2">
+                          {editingEmployeeId ? <Edit3 className="text-cyan-400" /> : <UserPlus className="text-cyan-400" />} 
+                          {editingEmployeeId ? 'Editar Funcionário' : 'Novo Cadastro'}
+                        </h3>
+                        {editingEmployeeId && (
+                           <button onClick={handleCancelEdit} className="text-xs flex items-center gap-1 text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1.5 rounded hover:bg-red-500/10 transition-all">
+                             <X className="w-3 h-3" /> Cancelar Edição
+                           </button>
+                        )}
+                      </div>
+                      
+                      <form onSubmit={handleSaveEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         {/* Facial Recognition Registration - Camera Only */}
+                         <div className="md:col-span-2 flex flex-col items-center justify-center mb-2">
+                            <label className="text-xs font-mono text-cyan-400 uppercase mb-3 flex items-center gap-2">
+                              <ScanFace className="w-4 h-4" /> Cadastro Facial do Funcionário
+                              {!modelsLoaded && <span className="text-yellow-500 animate-pulse">(Carregando IA...)</span>}
+                            </label>
+                            
+                            {!showCameraCapture ? (
+                              <>
+                                {/* Photo Preview or Start Camera */}
+                                <div className="relative">
+                                  <div className={`w-44 h-44 rounded-full border-4 ${newEmployee.photoBase64 ? 'border-green-500' : 'border-dashed border-slate-600'} flex items-center justify-center overflow-hidden bg-slate-950 shadow-2xl transition-all`}>
+                                    {newEmployee.photoBase64 ? (
+                                      <img src={newEmployee.photoBase64} alt="Rosto cadastrado" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="text-center text-slate-500 p-4">
+                                        <ScanFace className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                        <span className="text-xs font-bold uppercase">Rosto não cadastrado</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {newEmployee.photoBase64 && (
+                                    <div className="absolute -bottom-1 -right-1 bg-green-500 p-2 rounded-full text-white shadow-lg border-4 border-slate-900">
+                                      <CheckCircle className="w-5 h-5" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Camera Button - Primary Action */}
+                                <button
+                                  type="button"
+                                  onClick={startCaptureCamera}
+                                  disabled={!modelsLoaded}
+                                  className={`mt-6 flex items-center gap-3 px-8 py-4 ${
+                                    newEmployee.photoBase64 
+                                      ? 'bg-slate-800 hover:bg-slate-700 text-white' 
+                                      : 'bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white shadow-[0_0_25px_rgba(217,70,239,0.4)]'
+                                  } font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {!modelsLoaded ? (
+                                    <><Loader2 className="w-5 h-5 animate-spin" /> Carregando IA...</>
+                                  ) : newEmployee.photoBase64 ? (
+                                    <><Camera className="w-5 h-5" /> RECADASTRAR ROSTO</>
+                                  ) : (
+                                    <><Camera className="w-5 h-5" /> INICIAR CADASTRO FACIAL</>
+                                  )}
+                                </button>
+                                
+                                {!newEmployee.photoBase64 && (
+                                  <p className="mt-3 text-xs text-slate-500 text-center max-w-xs">
+                                    O funcionário deve estar presente para o cadastro facial
+                                  </p>
+                                )}
+                                
+                                {newEmployee.photoBase64 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewEmployee(prev => ({ ...prev, photoBase64: '' }))}
+                                    className="mt-3 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Remover cadastro facial
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              /* Camera Capture Mode - Full Screen Style */
+                              <div className="w-full max-w-lg animate-in fade-in zoom-in-95 duration-300">
+                                <div className="relative aspect-[4/3] bg-black rounded-2xl overflow-hidden border-4 border-fuchsia-500 shadow-[0_0_40px_rgba(217,70,239,0.3)]">
+                                  <video 
+                                    ref={captureVideoRef} 
+                                    autoPlay 
+                                    playsInline 
+                                    muted 
+                                    aria-label="Câmera para captura facial"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <canvas ref={captureCanvasRef} className="hidden" aria-hidden="true" />
+                                  
+                                  {/* Face Detection Overlay */}
+                                  <div className="absolute inset-0 pointer-events-none">
+                                    {/* Scanning line animation */}
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-fuchsia-500/80 shadow-[0_0_15px_#d946ef] animate-[scan_2s_linear_infinite]"></div>
+                                    
+                                    {/* Dark corners for focus effect */}
+                                    <div className="absolute inset-0 border-[40px] border-slate-950/70 rounded-xl"></div>
+                                    
+                                    {/* Guide oval */}
+                                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-56 border-4 rounded-full transition-colors duration-300 ${
+                                      faceDetected === true ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.5)]' : 
+                                      faceDetected === false ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.5)]' : 
+                                      'border-white/40'
+                                    }`} aria-hidden="true"></div>
+                                    
+                                    {/* Status indicator */}
+                                    <div 
+                                      aria-live="polite" 
+                                      aria-atomic="true"
+                                      className={`absolute top-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-sm font-bold uppercase flex items-center gap-2 shadow-lg ${
+                                        !isCaptureReady ? 'bg-yellow-500 text-yellow-900' :
+                                        isValidatingFace ? 'bg-blue-500 text-white' :
+                                        faceDetected === true ? 'bg-green-500 text-white' :
+                                        faceDetected === false ? 'bg-red-500 text-white' :
+                                        'bg-slate-800 text-white'
+                                      }`}
+                                    >
+                                      {!isCaptureReady ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin" /> Iniciando câmera...</>
+                                      ) : isValidatingFace ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin" /> Detectando...</>
+                                      ) : faceDetected === true ? (
+                                        <><CheckCircle className="w-4 h-4" /> Rosto Detectado!</>
+                                      ) : faceDetected === false ? (
+                                        <><X className="w-4 h-4" /> Posicione o Rosto</>
+                                      ) : (
+                                        <><ScanFace className="w-4 h-4" /> Aguardando...</>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Camera Controls */}
+                                <div className="flex gap-4 mt-6">
+                                  <button
+                                    type="button"
+                                    onClick={stopCaptureCamera}
+                                    className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                                  >
+                                    <X className="w-5 h-5" /> CANCELAR
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={capturePhotoFromCamera}
+                                    disabled={!isCaptureReady || isProcessingPhoto || faceDetected !== true}
+                                    className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all"
+                                  >
+                                    {isProcessingPhoto ? (
+                                      <><Loader2 className="w-5 h-5 animate-spin" /> Processando...</>
+                                    ) : (
+                                      <><CheckCircle className="w-5 h-5" /> CADASTRAR ROSTO</>
+                                    )}
+                                  </button>
+                                </div>
+                                
+                                <p className="text-center text-sm text-slate-400 mt-4">
+                                  Posicione o rosto do funcionário dentro do oval e aguarde a detecção
+                                </p>
+                              </div>
+                            )}
+                         </div>
+
+                         {/* Form Fields */}
+                         <div className="space-y-4">
+                           <TechInput label="Nome Completo" value={newEmployee.name} onChange={e => setNewEmployee({...newEmployee, name: e.target.value})} required />
+                           <TechInput label="CPF" value={newEmployee.cpf} onChange={e => setNewEmployee({...newEmployee, cpf: maskCPF(e.target.value)})} maxLength={14} required />
+                           <TechInput label="Cargo / Função" value={newEmployee.role} onChange={e => setNewEmployee({...newEmployee, role: e.target.value})} />
+                         </div>
+
+                         <div className="space-y-4">
+                           <TechInput label="WhatsApp" value={newEmployee.whatsapp} onChange={e => setNewEmployee({...newEmployee, whatsapp: e.target.value})} />
+                           
+                           <div className="space-y-2">
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Local de Serviço</label>
+                             <div className="relative">
+                               <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                               <select value={newEmployee.locationId} onChange={e => setNewEmployee({...newEmployee, locationId: e.target.value})} className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors" required>
+                                 <option value="">Selecione um local...</option>
+                                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                               </select>
+                             </div>
+                           </div>
+
+                           <div className="space-y-2">
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Turno de Trabalho</label>
+                             <div className="relative">
+                               <Clock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                               <select value={newEmployee.shift} onChange={e => setNewEmployee({...newEmployee, shift: e.target.value})} className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors">
+                                 <option value="Diurno">Diurno (08:00 - 18:00)</option>
+                                 <option value="Noturno">Noturno (22:00 - 06:00)</option>
+                                 <option value="Comercial">Comercial</option>
+                                 <option value="12x36">Escala 12x36</option>
+                               </select>
+                             </div>
+                           </div>
+                         </div>
+
+                         <div className="md:col-span-2">
+                            <TechInput label="PIN de Acesso (Login Manual)" value={newEmployee.pin} onChange={e => setNewEmployee({...newEmployee, pin: e.target.value.replace(/\D/g,'')})} maxLength={6} placeholder="Mínimo 4 dígitos" icon={<KeyRound className="w-4 h-4"/>} required />
+                         </div>
+
+                         <div className="md:col-span-2 pt-6 border-t border-slate-800">
+                           <button 
+                             disabled={isProcessingPhoto}
+                             className={`w-full bg-gradient-to-r text-white py-4 rounded-lg font-bold shadow-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${editingEmployeeId ? 'from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500' : 'from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500'}`}
+                           >
+                             {isProcessingPhoto ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                             {editingEmployeeId ? 'Salvar Alterações' : 'Cadastrar Funcionário'}
+                           </button>
+                         </div>
+                      </form>
+                    </div>
+                 ) : (
+                    // LIST VIEW
+                    <div className="animate-in fade-in zoom-in-95 duration-300">
+                      {/* Tabs by Location */}
+                      {locations.length > 0 ? (
+                        <div className="flex overflow-x-auto gap-1 border-b border-slate-800 pb-0 mb-6 scrollbar-thin scrollbar-thumb-slate-700">
+                          {locations.map(loc => (
+                            <button
+                              key={loc.id}
+                              onClick={() => setActiveLocationTab(loc.id)}
+                              className={`
+                                px-6 py-3 text-sm font-mono whitespace-nowrap rounded-t-lg border-b-2 transition-all flex items-center gap-2
+                                ${activeLocationTab === loc.id 
+                                  ? 'border-cyan-500 text-cyan-400 bg-cyan-900/10 font-bold' 
+                                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'}
+                              `}
+                            >
+                              <MapPin className="w-3 h-3" />
+                              {loc.name}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                         <div className="text-center p-8 border border-dashed border-slate-800 rounded-xl text-slate-500">
+                           Nenhum local cadastrado. Cadastre um local primeiro.
+                         </div>
+                      )}
+
+                      {/* Employee Grid */}
+                      <div className="bg-slate-950/30 p-4 rounded-b-xl min-h-[400px]">
+                        {(() => {
+                          const filteredEmployees = employees.filter(e => e.locationId === activeLocationTab);
+                          if (!activeLocationTab) return <div className="text-center text-slate-500 py-10">Selecione um local acima.</div>;
+                          if (filteredEmployees.length === 0) return (
+                            <div className="flex flex-col items-center justify-center h-full py-20 text-slate-500 opacity-50">
+                              <Users className="w-16 h-16 mb-4 stroke-1" />
+                              <p>Nenhum funcionário neste local.</p>
+                            </div>
+                          );
+
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {filteredEmployees.map(emp => (
+                                <div key={emp.id} className="bg-slate-950 border border-slate-800 rounded-xl p-6 relative group hover:border-cyan-500/40 transition-all duration-300 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+                                  {/* Action Buttons */}
+                                  <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditEmployee(emp);
+                                      }} 
+                                      className="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-cyan-500/10 transition-all"
+                                      title="Editar"
+                                    >
+                                      <Edit3 className="w-4 h-4"/>
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteEmployee(emp.id);
+                                      }} 
+                                      className="text-slate-500 hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-all"
+                                      title="Excluir"
+                                    >
+                                      <Trash2 className="w-4 h-4"/>
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-start gap-4 mb-6">
+                                      <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-cyan-500/50 transition-colors">
+                                        {emp.photoBase64 ? (
+                                           <img src={emp.photoBase64} className="w-full h-full object-cover"/>
+                                        ) : (
+                                           <User className="w-8 h-8 text-slate-700"/>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0 pt-1">
+                                        <div className="text-white font-bold text-lg leading-tight truncate uppercase font-tech tracking-wide">{emp.name}</div>
+                                        <div className="text-cyan-500 text-xs font-bold uppercase tracking-wider mb-2">{emp.role || 'SEM CARGO'}</div>
+                                        <span className="inline-block bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-400 font-mono uppercase">
+                                          {emp.shift}
+                                        </span>
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="pt-4 border-t border-slate-800/80 flex justify-between items-center text-xs font-mono text-slate-500">
+                                    <span className="flex items-center gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
+                                      CPF: {emp.cpf}
+                                    </span>
+                                    <span className="flex items-center gap-2">
+                                      PIN: <span className="text-white tracking-[0.2em]">••••</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                 )}
+              </div>
+            )}
+            
+            {activeTab === 'SETTINGS' && (
+              <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-6">
+                <h3 className="font-tech text-white mb-4">Configurações</h3>
+                <form onSubmit={handleSaveSettings} className="max-w-md space-y-4">
+                  <TechInput label="Tenant ID" value={tenantCode} onChange={e => setTenantCode(e.target.value.toUpperCase())} readOnly={!isEditingSettings} />
+                  <button type="button" onClick={() => setIsEditingSettings(!isEditingSettings)} className="text-cyan-400 text-sm flex gap-2"><Edit3 className="w-4 h-4"/> Editar</button>
+                  {isEditingSettings && <button className="w-full bg-cyan-600 text-white py-2 rounded">{isSavingSettings ? 'Salvando...' : 'Salvar'}</button>}
+                </form>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // -- RENDER: EMPLOYEE DASHBOARD (Biometric Lock) --
+  
+  // 🔥 Auto-start camera when component mounts (Employee Login)
+  useEffect(() => {
+    if (!isBiometricVerified && !showPinLogin && employeeContext && modelsLoaded) {
+      console.log('🚀 Auto-iniciando câmera para login automático...');
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 500); // Small delay to ensure UI is ready
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isBiometricVerified, showPinLogin, employeeContext, modelsLoaded]);
+
+  if (!isBiometricVerified) {
+    return (
+      <div className="relative min-h-screen flex flex-col items-center justify-center p-4">
+        <TechBackground />
+        
+        <div className="relative z-30 w-full max-w-md">
+           <button onClick={onBack} className="absolute -top-12 left-0 text-slate-400 flex items-center gap-2 text-xs uppercase"><ArrowLeft className="w-4 h-4"/> Desconectar</button>
+           
+           <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-[0_0_60px_-10px_rgba(217,70,239,0.2)] text-center overflow-hidden transition-all duration-300">
+              
+              {!showPinLogin ? (
+                /* BIOMETRIC MODE - CÂMERA AUTOMÁTICA */
+                !cameraActive ? (
+                  <>
+                    <div className="w-24 h-24 bg-slate-950 rounded-full mx-auto mb-6 flex items-center justify-center border border-slate-800 shadow-[0_0_30px_rgba(217,70,239,0.3)] animate-pulse">
+                      <Loader2 className="w-10 h-10 text-fuchsia-500 animate-spin" />
+                    </div>
+                    <h2 className="text-2xl font-tech font-bold text-white mb-2">Login Automático</h2>
+                    <p className="text-slate-400 text-sm mb-2">
+                      Iniciando reconhecimento facial...
+                    </p>
+                    <p className="text-fuchsia-400 text-xs font-mono mb-6">
+                      Local: {employeeContext?.locationName}
+                    </p>
+
+                    <div className="bg-slate-950/50 border border-slate-700 rounded-lg p-4 mb-6">
+                      <p className="text-slate-300 text-sm text-center mb-2">
+                        ✨ <strong>Sem botões necessários</strong>
+                      </p>
+                      <p className="text-slate-500 text-xs text-center">
+                        A câmera abrirá automaticamente e reconhecerá seu rosto
+                      </p>
+                    </div>
+
+                    <div className="space-y-4 text-left">
+                      <button 
+                        onClick={() => setShowPinLogin(true)}
+                        className="w-full text-center text-xs text-slate-500 hover:text-fuchsia-400 mt-4 transition-colors underline decoration-slate-700 hover:decoration-fuchsia-400"
+                      >
+                        Problemas com a câmera? Entrar com PIN
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center">
+                     <div className="relative w-full aspect-[3/4] bg-black rounded-lg overflow-hidden border-2 border-fuchsia-500 shadow-2xl mb-4">
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                        <canvas ref={canvasRef} className="hidden" />
+                        
+                        {/* Scanning Overlay */}
+                        <div className="absolute inset-0 pointer-events-none">
+                          <div className="absolute top-0 left-0 w-full h-1 bg-fuchsia-500/80 shadow-[0_0_15px_#d946ef] animate-[scan_2s_linear_infinite]"></div>
+                          <div className="absolute inset-0 border-[50px] border-slate-950/60"></div>
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 border-2 border-fuchsia-400/50 rounded-full"></div>
+                        </div>
+                     </div>
+
+                     {/* 🔥 Feedback visual de reconhecimento automático */}
+                     <div className="bg-gradient-to-r from-fuchsia-950/50 to-purple-950/50 border border-fuchsia-500/30 rounded-lg p-5 mb-4">
+                       <div className="flex items-center justify-center gap-3 mb-3">
+                         {isScanning ? (
+                           <Loader2 className="w-6 h-6 text-fuchsia-400 animate-spin" />
+                         ) : (
+                           <Activity className="w-6 h-6 text-fuchsia-400 animate-pulse" />
+                         )}
+                       </div>
+                       <p className="text-white font-bold text-base mb-2 text-center">
+                         Reconhecimento Automático Ativo
+                       </p>
+                       <p className="text-fuchsia-300 font-mono text-sm animate-pulse uppercase text-center">
+                         {scanMessage || 'Posicione seu rosto'}
+                       </p>
+                       <p className="text-slate-400 text-xs text-center mt-3">
+                         O sistema irá identificar você automaticamente
+                       </p>
+                     </div>
+
+                     {/* Apenas botão de cancelar - SEM botão de identificar */}
+                     <button onClick={stopCamera} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold text-sm flex justify-center items-center gap-2 transition-colors">
+                       <X className="w-4 h-4" /> CANCELAR
+                     </button>
+                  </div>
+                )
+              ) : (
+                /* PIN MODE - NEEDS CPF FOR IDENTIFICATION */
+                <form onSubmit={handlePinLogin} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                   <div className="w-20 h-20 bg-slate-950 rounded-full mx-auto mb-6 flex items-center justify-center border border-slate-800 shadow-[0_0_30px_rgba(217,70,239,0.3)]">
+                      <KeyRound className="w-8 h-8 text-fuchsia-500" />
+                   </div>
+                   <h2 className="text-2xl font-tech font-bold text-white mb-6">Acesso Manual</h2>
+                   
+                   <div className="space-y-4 text-left">
+                     <TechInput 
+                        label="Seu CPF" 
+                        value={cpfForLogin} 
+                        onChange={(e) => setCpfForLogin(maskCPF(e.target.value))}
+                        placeholder="000.000.000-00"
+                        className="border-fuchsia-500/30 focus:border-fuchsia-500"
+                        required
+                      />
+                     <TechInput 
+                        label="PIN de Segurança" 
+                        type="password"
+                        value={pinForLogin} 
+                        onChange={(e) => setPinForLogin(e.target.value.replace(/\D/g,''))}
+                        placeholder="••••••"
+                        className="border-fuchsia-500/30 focus:border-fuchsia-500"
+                        maxLength={6}
+                        required
+                      />
+                      
+                      <button 
+                        type="submit"
+                        disabled={isScanning}
+                        className="w-full py-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg uppercase tracking-wider text-sm transition-all shadow-[0_0_20px_rgba(217,70,239,0.4)] flex justify-center items-center gap-2"
+                      >
+                         {isScanning ? <Loader2 className="w-5 h-5 animate-spin" /> : "VALIDAR ACESSO"}
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => setShowPinLogin(false)}
+                        className="w-full text-center text-xs text-slate-500 hover:text-fuchsia-400 mt-4 transition-colors"
+                      >
+                        Voltar para Biometria
+                      </button>
+                   </div>
+                </form>
+              )}
+
+           </div>
+        </div>
+        <style>{`@keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }`}</style>
+      </div>
+    );
+  }
+
+  // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
+
+  return (
+    <div className="relative min-h-screen p-6 flex flex-col items-center">
+      <TechBackground />
+      <div className="relative z-30 w-full max-w-4xl">
+         {/* Header */}
+         <div className="flex justify-between items-center mb-10 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur">
+            <div className="flex items-center gap-4">
+               <div className="w-16 h-16 rounded-full border-2 border-fuchsia-500 overflow-hidden shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+                 <img src={identifiedEmployee?.photoBase64} alt="Profile" className="w-full h-full object-cover" />
+               </div>
+               <div>
+                 <h1 className="text-2xl font-bold text-white uppercase">{identifiedEmployee?.name}</h1>
+                 <div className="flex gap-3 text-xs font-mono text-slate-400">
+                   <span className="flex items-center gap-1 text-fuchsia-400"><Activity className="w-3 h-3"/> ONLINE</span>
+                   <span>{identifiedEmployee?.role}</span>
+                   <span>{employeeContext?.companyName}</span>
+                 </div>
+               </div>
+            </div>
+            <button onClick={onBack} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300"><ArrowLeft className="w-5 h-5" /></button>
+         </div>
+
+         {/* Time Clock Action */}
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-8 flex flex-col items-center justify-center text-center shadow-2xl">
+               <div className="text-6xl font-tech font-bold text-white mb-2 tracking-widest">
+                 {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+               </div>
+               <div className="text-slate-400 font-mono text-sm mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+               
+               {/* Attendance Type Buttons */}
+               <div className="w-full max-w-md space-y-3 mb-6">
+                 <button 
+                   onClick={() => startAttendanceFlow('ENTRY')}
+                   disabled={isCheckingLocation || isRegisteringAttendance}
+                   className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <LogIn className="w-6 h-6" /> ENTRADA
+                 </button>
+
+                 <button 
+                   onClick={() => startAttendanceFlow('BREAK_START')}
+                   disabled={isCheckingLocation || isRegisteringAttendance}
+                   className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <Coffee className="w-6 h-6" /> INÍCIO PAUSA
+                 </button>
+
+                 <button 
+                   onClick={() => startAttendanceFlow('BREAK_END')}
+                   disabled={isCheckingLocation || isRegisteringAttendance}
+                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <Play className="w-6 h-6" /> FIM PAUSA
+                 </button>
+
+                 <button 
+                   onClick={() => startAttendanceFlow('EXIT')}
+                   disabled={isCheckingLocation || isRegisteringAttendance}
+                   className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <LogOut className="w-6 h-6" /> SAÍDA
+                 </button>
+               </div>
+               
+               <p className="mt-4 text-xs text-slate-500 flex items-center gap-2">
+                 <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400">{employeeContext?.locationName}</span>
+               </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-6">
+                 <h3 className="font-bold text-white mb-4 flex items-center gap-2"><List className="w-4 h-4 text-cyan-400"/> Histórico Recente</h3>
+                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                    {attendanceRecords.length === 0 ? (
+                      <p className="text-slate-500 text-sm text-center py-4">Nenhum registro ainda</p>
+                    ) : (
+                      attendanceRecords.map((record) => {
+                        const typeColors = {
+                          ENTRY: 'border-green-500',
+                          BREAK_START: 'border-yellow-500',
+                          BREAK_END: 'border-blue-500',
+                          EXIT: 'border-red-500'
+                        };
+                        const typeLabels = {
+                          ENTRY: 'Entrada',
+                          BREAK_START: 'Início Pausa',
+                          BREAK_END: 'Fim Pausa',
+                          EXIT: 'Saída'
+                        };
+                        return (
+                          <div key={record.id} className={`flex justify-between text-sm p-3 bg-slate-950/50 rounded border-l-2 ${typeColors[record.type]}`}>
+                            <div>
+                              <span className="text-slate-300">{typeLabels[record.type]}</span>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {record.timestamp.toLocaleDateString('pt-BR')}
+                              </div>
+                            </div>
+                            <span className="font-mono text-white">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                 </div>
+              </div>
+            </div>
+         </div>
+
+         {/* Attendance Flow Modal */}
+         {showAttendanceFlow && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+             <div className="bg-slate-900 border-2 border-fuchsia-500/50 rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-[0_0_50px_rgba(217,70,239,0.3)]">
+               {/* Header */}
+               <div className="flex justify-between items-center mb-6">
+                 <div>
+                   <h2 className="text-2xl font-bold text-white flex items-center gap-3 mb-1">
+                     <Clock className="w-8 h-8 text-fuchsia-400" />
+                     Registrar Ponto
+                   </h2>
+                   {attendanceType && (
+                     <p className="text-fuchsia-400 text-sm font-mono ml-11">
+                       {attendanceType === 'ENTRY' && '🟢 Entrada'}
+                       {attendanceType === 'BREAK_START' && '🟡 Início da Pausa'}
+                       {attendanceType === 'BREAK_END' && '🔵 Fim da Pausa'}
+                       {attendanceType === 'EXIT' && '🔴 Saída'}
+                     </p>
+                   )}
+                 </div>
+                 <button 
+                   onClick={cancelAttendanceFlow}
+                   className="p-2 hover:bg-slate-800 rounded-full transition-colors"
+                 >
+                   <X className="w-6 h-6 text-slate-400" />
+                 </button>
+               </div>
+
+               {/* Step 1: Verificando Localização */}
+               {isCheckingLocation && (
+                 <div className="text-center py-8">
+                   <Loader2 className="w-16 h-16 text-fuchsia-400 animate-spin mx-auto mb-4" />
+                   <p className="text-white text-lg font-semibold mb-2">Verificando sua localização...</p>
+                   <p className="text-slate-400 text-sm">Aguarde enquanto confirmamos que você está no local de trabalho</p>
+                 </div>
+               )}
+
+               {/* Step 2: Reconhecimento Facial Automático */}
+               {locationVerified && cameraActive && !isRegisteringAttendance && (
+                 <div className="space-y-4">
+                   <div className="bg-green-950/30 rounded-xl p-4 border border-green-500/30">
+                     <p className="text-green-400 text-sm font-semibold mb-2 flex items-center gap-2">
+                       <CheckCircle className="w-4 h-4" /> Localização verificada
+                     </p>
+                     <p className="text-slate-400 text-xs">Você está no local de trabalho</p>
+                   </div>
+
+                   <div className="relative">
+                     <video 
+                       ref={videoRef}
+                       autoPlay 
+                       playsInline 
+                       muted
+                       className="w-full h-[400px] object-cover rounded-xl border-2 border-fuchsia-500/50"
+                     />
+                     <canvas ref={canvasRef} className="hidden" />
+                     
+                     {/* Overlay com guia de posicionamento */}
+                     <div className="absolute inset-0 pointer-events-none">
+                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 border-2 border-fuchsia-400/50 rounded-full"></div>
+                     </div>
+                     
+                     <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                       <div className="bg-black/80 backdrop-blur px-5 py-2.5 rounded-full border border-fuchsia-500/30">
+                         <p className="text-white text-sm font-mono flex items-center gap-2">
+                           {isScanning ? (
+                             <><Loader2 className="w-4 h-4 animate-spin" /> {scanMessage}</>
+                           ) : (
+                             <><Activity className="w-4 h-4 animate-pulse" /> {scanMessage || 'Posicione seu rosto'}</>
+                           )}
+                         </p>
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* 🔥 Feedback de reconhecimento automático - SEM BOTÕES DE CONFIRMAÇÃO */}
+                   <div className="space-y-3">
+                     <div className="bg-gradient-to-r from-fuchsia-950/50 to-purple-950/50 border border-fuchsia-500/30 rounded-xl p-6 text-center">
+                       <div className="flex items-center justify-center gap-3 mb-3">
+                         {isScanning || isRegisteringAttendance ? (
+                           <Loader2 className="w-8 h-8 text-fuchsia-400 animate-spin" />
+                         ) : (
+                           <Activity className="w-8 h-8 text-fuchsia-400 animate-pulse" />
+                         )}
+                       </div>
+                       <p className="text-white font-bold text-lg mb-2">
+                         {isRegisteringAttendance ? '💾 Registrando ponto...' : '🤖 Registro Automático Ativo'}
+                       </p>
+                       <p className="text-fuchsia-300 font-mono text-sm mb-3">
+                         {scanMessage || 'Posicione seu rosto na câmera'}
+                       </p>
+                       <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-700">
+                         <p className="text-slate-300 text-xs mb-1">
+                           🔐 <strong>Validação de Segurança</strong>
+                         </p>
+                         <p className="text-slate-400 text-xs">
+                           O sistema irá verificar se você é o funcionário logado ({identifiedEmployee?.name}) e registrar automaticamente
+                         </p>
+                       </div>
+                     </div>
+
+                     {/* Apenas botão Cancelar */}
+                     <button
+                       onClick={cancelAttendanceFlow}
+                       disabled={isRegisteringAttendance}
+                       className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                     >
+                       <X className="w-5 h-5" />
+                       {isRegisteringAttendance ? 'Aguarde...' : 'Cancelar Registro'}
+                     </button>
+                   </div>
+                 </div>
+               )}
+
+               {/* Step 3: Registrando Ponto */}
+               {isRegisteringAttendance && (
+                 <div className="text-center py-8">
+                   <Loader2 className="w-16 h-16 text-green-400 animate-spin mx-auto mb-4" />
+                   <p className="text-white text-lg font-semibold mb-2">Registrando ponto...</p>
+                   <p className="text-slate-400 text-sm">Aguarde um momento</p>
+                 </div>
+               )}
+             </div>
+           </div>
+         )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
