@@ -18,6 +18,25 @@ const App: React.FC = () => {
   // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // 1. Check for persisted employee context first (for Employee Dashboard persistence)
+      const storedEmployeeContext = localStorage.getItem('nexus_employee_context');
+      
+      if (storedEmployeeContext) {
+        try {
+          const context = JSON.parse(storedEmployeeContext);
+          setEmployeeContext(context);
+          setView('DASHBOARD_EMPLOYEE');
+          setIsLoading(false);
+          // If we have a context, we assume we are in employee mode, 
+          // even if firebase auth user is present (anonymous or not)
+          return; 
+        } catch (e) {
+          console.error("Error parsing stored employee context", e);
+          localStorage.removeItem('nexus_employee_context');
+        }
+      }
+
+      // 2. If no employee context, check for Company Auth
       if (user) {
         // User is signed in, fetch company details
         try {
@@ -109,6 +128,8 @@ const App: React.FC = () => {
 
   const handleEmployeeLogin = (context: EmployeeContext) => {
     setEmployeeContext(context);
+    // Persist context to survive refreshes
+    localStorage.setItem('nexus_employee_context', JSON.stringify(context));
     setView('DASHBOARD_EMPLOYEE');
   };
 
@@ -119,6 +140,12 @@ const App: React.FC = () => {
       await signOut(auth);
       setCurrentCompany(null);
       setEmployeeContext(null);
+      
+      // Clear all local storage related to session
+      localStorage.removeItem('nexus_employee_context');
+      localStorage.removeItem('nexus_employee');
+      localStorage.removeItem('nexus_verified');
+
       setView('LANDING');
     } catch (error) {
       console.error("Logout error", error);
