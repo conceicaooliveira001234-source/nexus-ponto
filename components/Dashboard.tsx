@@ -93,6 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isRegisteringAttendance, setIsRegisteringAttendance] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<ServiceLocation | null>(null);
+  const [isIdentityConfirmed, setIsIdentityConfirmed] = useState(false);
   
   // -- Attendance History States --
   const [showHistoryView, setShowHistoryView] = useState(false);
@@ -296,34 +297,32 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [cameraActive, modelsLoaded, isBiometricVerified, isScanning, showAttendanceFlow]);
 
-  // -- Auto-Recognition for Attendance Flow --
+  // -- Continuous Validation for Attendance Flow --
   useEffect(() => {
-    let attendanceRecognitionInterval: NodeJS.Timeout | null = null;
+    let attendanceValidationInterval: NodeJS.Timeout | null = null;
 
-    // 🔥 Reconhecimento automático durante registro de ponto
+    // 🔥 Validação contínua durante registro de ponto para habilitar botão
     if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee && videoRef.current) {
-      console.log('🤖 Iniciando reconhecimento automático para registro de ponto...');
-      console.log('👤 Funcionário logado:', identifiedEmployee.name);
+      console.log('🤖 Iniciando validação contínua para registro de ponto...');
       
       // Aguardar 1 segundo para câmera estabilizar
       const startDelay = setTimeout(() => {
-        attendanceRecognitionInterval = setInterval(() => {
-          if (!isScanning && !isRegisteringAttendance) {
-            console.log('🔄 Tentando reconhecer e registrar automaticamente...');
-            autoRecognizeAndRegister();
+        attendanceValidationInterval = setInterval(() => {
+          if (!isRegisteringAttendance) {
+            verifyIdentityForAttendance();
           }
-        }, 2500); // A cada 2.5 segundos
+        }, 1000); // A cada 1 segundo para feedback rápido
       }, 1000);
 
       return () => {
         clearTimeout(startDelay);
-        if (attendanceRecognitionInterval) {
-          console.log('🛑 Parando reconhecimento automático de ponto...');
-          clearInterval(attendanceRecognitionInterval);
+        if (attendanceValidationInterval) {
+          console.log('🛑 Parando validação contínua de ponto...');
+          clearInterval(attendanceValidationInterval);
         }
       };
     }
-  }, [showAttendanceFlow, locationVerified, cameraActive, modelsLoaded, isRegisteringAttendance, isScanning, identifiedEmployee]);
+  }, [showAttendanceFlow, locationVerified, cameraActive, modelsLoaded, isRegisteringAttendance, identifiedEmployee]);
 
   // -- Load Current Location and Attendance Records (Employee View) --
   useEffect(() => {
@@ -987,6 +986,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setShowAttendanceFlow(true);
     setLocationVerified(false);
     setIsCheckingLocation(true);
+    setIsIdentityConfirmed(false); // Reset identity confirmation
 
     try {
       // Step 1: Verificar localização
@@ -1350,66 +1350,50 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     // NÃO resetar isBiometricVerified nem identifiedEmployee - o usuário continua logado
   };
 
-  // 🔥 NOVO: Função de reconhecimento e registro AUTOMÁTICO
-  const autoRecognizeAndRegister = async () => {
+  // 🔥 NOVO: Função de validação contínua para habilitar botão
+  const verifyIdentityForAttendance = async () => {
     if (!videoRef.current || !canvasRef.current || !identifiedEmployee || !modelsLoaded) return;
     
-    setIsScanning(true);
-    setScanMessage('🔍 Verificando identidade...');
-    console.log('🤖 AUTO-RECONHECIMENTO: Iniciando validação de identidade...');
-
+    // Não setar isScanning aqui para não piscar UI, usar apenas para feedback de mensagem se necessário
+    
     try {
-      // 1. Detectar rosto no vídeo
       const videoEl = videoRef.current;
+      
       const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
 
       if (!detection) {
-        console.warn('⚠️ Nenhum rosto detectado no vídeo');
         setScanMessage('👤 Posicione seu rosto...');
-        setIsScanning(false);
+        setIsIdentityConfirmed(false);
         return;
       }
 
-      console.log('✅ Rosto detectado no vídeo (confiança:', detection.detection.score.toFixed(3), ')');
-
-      // 2. Comparar com a foto do funcionário logado (VALIDAÇÃO DE SEGURANÇA)
       if (!identifiedEmployee.photoBase64) {
-        throw new Error('Funcionário não possui foto cadastrada');
+         setScanMessage('❌ Erro: Foto de referência ausente');
+         return;
       }
 
-      console.log('🔐 Validando se é o mesmo funcionário logado:', identifiedEmployee.name);
       const img = await loadImage(identifiedEmployee.photoBase64);
       const referenceDetection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
 
       if (!referenceDetection) {
-        throw new Error('Não foi possível processar a foto de referência');
+         // Se não conseguir ler a foto de referência, não dá pra validar
+         return;
       }
 
-      // 3. Calcular similaridade
       const distance = faceapi.euclideanDistance(detection.descriptor, referenceDetection.descriptor);
-      const SECURITY_THRESHOLD = 0.55; // Threshold de segurança
-      
-      console.log(`📊 Distância euclidiana: ${distance.toFixed(4)} (threshold: ${SECURITY_THRESHOLD})`);
+      const SECURITY_THRESHOLD = 0.55;
 
       if (distance > SECURITY_THRESHOLD) {
-        console.warn('❌ SEGURANÇA: Rosto detectado NÃO corresponde ao funcionário logado!');
-        setScanMessage('⚠️ Rosto não reconhecido!');
-        alert('❌ ERRO DE SEGURANÇA\n\nO rosto detectado não corresponde ao funcionário logado.\n\nPor favor, certifique-se de que é você quem está registrando o ponto.');
-        setIsScanning(false);
-        return;
+        setScanMessage('⚠️ Rosto não corresponde');
+        setIsIdentityConfirmed(false);
+      } else {
+        setScanMessage('✅ Identidade Confirmada');
+        setIsIdentityConfirmed(true);
       }
 
-      console.log('✅ SEGURANÇA: Identidade confirmada! É o mesmo funcionário.');
-      setScanMessage('✅ Identidade confirmada! Registrando...');
-
-      // 4. Registrar ponto automaticamente
-      console.log('💾 Registrando ponto automaticamente...');
-      await registerAttendance();
-
-    } catch (err: any) {
-      console.error('❌ Erro no reconhecimento automático:', err);
-      setScanMessage('❌ Erro na verificação');
-      setIsScanning(false);
+    } catch (err) {
+      console.error(err);
+      setIsIdentityConfirmed(false);
     }
   };
 
@@ -2244,7 +2228,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                          )}
                        </div>
                        <p className="text-white font-bold text-lg mb-2">
-                         {isRegisteringAttendance ? '💾 Registrando ponto...' : '🤖 Registro Automático Ativo'}
+                         {isRegisteringAttendance ? '💾 Registrando ponto...' : '🤖 Validação Biométrica'}
                        </p>
                        <p className="text-fuchsia-300 font-mono text-sm mb-3">
                          {scanMessage || 'Posicione seu rosto na câmera'}
@@ -2254,10 +2238,29 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                            🔐 <strong>Validação de Segurança</strong>
                          </p>
                          <p className="text-slate-400 text-xs">
-                           O sistema irá verificar se você é o funcionário logado ({identifiedEmployee?.name}) e registrar automaticamente
+                           O sistema irá verificar se você é o funcionário logado ({identifiedEmployee?.name}) para habilitar o registro
                          </p>
                        </div>
                      </div>
+
+                     {/* Botão de Confirmação Manual */}
+                     <button
+                       onClick={registerAttendance}
+                       disabled={!isIdentityConfirmed || isRegisteringAttendance}
+                       className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
+                         isIdentityConfirmed 
+                           ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] cursor-pointer' 
+                           : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                       }`}
+                     >
+                       {isRegisteringAttendance ? (
+                         <><Loader2 className="w-5 h-5 animate-spin" /> Registrando...</>
+                       ) : isIdentityConfirmed ? (
+                         <><CheckCircle className="w-5 h-5" /> CONFIRMAR PONTO</>
+                       ) : (
+                         <><ScanFace className="w-5 h-5" /> Aguardando Identificação...</>
+                       )}
+                     </button>
 
                      {/* Apenas botão Cancelar */}
                      <button
