@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download, Bell
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -124,6 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [deletionTarget, setDeletionTarget] = useState<{ id: string; name: string } | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState('Notification' in window ? Notification.permission : 'denied');
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
@@ -132,6 +133,102 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
   }, []);
+
+  // -- Notification Logic --
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showReminderNotification = (title: string, body: string) => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(registration => {
+        registration.showNotification(title, {
+          body,
+          icon: '/pwa-192x192.png',
+          badge: '/favicon.ico',
+          vibrate: [200, 100, 200],
+        });
+        playSound.alert();
+      });
+    }
+  };
+
+  useEffect(() => {
+    const clearNotificationTimeout = () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+        notificationTimeoutRef.current = null;
+      }
+    };
+
+    if (notificationPermission !== 'granted' || !currentShift) {
+      clearNotificationTimeout();
+      return;
+    }
+
+    const timeToDate = (timeStr: string | undefined): Date | null => {
+      if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      return date;
+    };
+
+    const schedule = [
+      { type: 'ENTRY', time: timeToDate(currentShift.entryTime), label: 'entrada' },
+      { type: 'BREAK_START', time: timeToDate(currentShift.breakTime), label: 'início da pausa' },
+      { type: 'BREAK_END', time: timeToDate(currentShift.breakEndTime), label: 'fim da pausa' },
+      { type: 'EXIT', time: timeToDate(currentShift.exitTime), label: 'saída' },
+    ];
+    
+    const now = new Date();
+    
+    let nextEvent = null;
+    for (const event of schedule) {
+      const hasHappened = todayAttendance.some(record => record.type === event.type);
+      if (event.time && !hasHappened && event.time > now) {
+        nextEvent = event;
+        break;
+      }
+    }
+    
+    clearNotificationTimeout();
+
+    if (nextEvent && nextEvent.time) {
+      const NOTIFICATION_LEAD_TIME_MS = 3 * 60 * 1000;
+      const notificationTime = new Date(nextEvent.time.getTime() - NOTIFICATION_LEAD_TIME_MS);
+
+      if (notificationTime > now) {
+        const delay = notificationTime.getTime() - now.getTime();
+        console.log(`🔔 Agendando notificação para "${nextEvent.label}" em ${Math.round(delay / 1000 / 60)} minutos.`);
+        
+        notificationTimeoutRef.current = setTimeout(() => {
+          showReminderNotification(
+            'Lembrete de Ponto',
+            `Faltam 3 minutos para o seu horário de ${nextEvent.label}.`
+          );
+        }, delay);
+      }
+    }
+
+    return () => clearNotificationTimeout();
+  }, [currentShift, notificationPermission, todayAttendance]);
+
+  const handleRequestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      showToast('Seu navegador não suporta notificações.', 'error');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+
+    if (permission === 'granted') {
+      showToast('Ótimo! Você receberá lembretes para bater o ponto.', 'success');
+      playSound.success();
+    } else {
+      showToast('Você não receberá lembretes. Habilite as notificações nas configurações do site se mudar de ideia.', 'info');
+      playSound.error();
+    }
+  };
 
   // -- Timer Effect for Real-time Updates --
   useEffect(() => {
@@ -2942,6 +3039,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               <button onClick={handleDashboardLogout} title="Desconectar" className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
             </div>
          </div>
+
+         {activeEmployeeTab === 'DASHBOARD' && notificationPermission === 'default' && (
+           <div className="bg-slate-800/50 border border-fuchsia-500/30 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in">
+             <div className="flex items-center gap-3 text-left w-full">
+                 <div className="p-2 bg-fuchsia-500/10 rounded-full border border-fuchsia-500/20">
+                   <Bell className="w-6 h-6 text-fuchsia-400 animate-pulse" />
+                 </div>
+                 <div>
+                     <p className="font-bold text-white">Lembretes de Ponto</p>
+                     <p className="text-sm text-slate-300">Quer ser notificado 3 minutos antes dos seus horários?</p>
+                 </div>
+             </div>
+             <button
+                 onClick={handleRequestNotificationPermission}
+                 className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-2 px-6 rounded-lg transition-colors w-full md:w-auto shrink-0"
+             >
+                 Ativar Notificações
+             </button>
+           </div>
+         )}
 
          {activeEmployeeTab === 'HISTORY' ? (
             // HISTORY VIEW
