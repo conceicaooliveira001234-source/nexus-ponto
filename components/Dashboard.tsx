@@ -117,6 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const [generatedLink, setGeneratedLink] = useState('');
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [deletionTarget, setDeletionTarget] = useState<{ id: string; name: string } | null>(null);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
@@ -1055,34 +1056,41 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     playSound.click(); // 🔊 SOM DE CLIQUE
   };
 
-  const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm("Tem certeza que deseja DELETAR este funcionário e TODOS os seus registros de ponto? Essa ação não pode ser desfeita.")) {
-      try {
-        // 1. Find all attendance records for this employee
-        const attendanceRef = collection(db, "attendance");
-        const q = query(attendanceRef, where("employeeId", "==", id));
-        const snapshot = await getDocs(q);
+  const confirmDeleteEmployee = (employee: Employee) => {
+    setDeletionTarget({ id: employee.id, name: employee.name });
+  };
 
-        // 2. Delete all found attendance records in a batch
-        if (!snapshot.empty) {
-          const batch = writeBatch(db);
-          snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-          });
-          await batch.commit();
-          console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${id}.`);
-        }
+  const executeDeleteEmployee = async () => {
+    if (!deletionTarget) return;
 
-        // 3. Delete the employee document itself
-        await deleteDoc(doc(db, "employees", id));
-        
-        showToast("Funcionário e todos os seus dados foram removidos.", "success");
-        playSound.click(); // 🔊 SOM DE CLIQUE
-      } catch (error) {
-        console.error("Error deleting employee and their records:", error);
-        showToast("Erro ao remover funcionário e seus dados.", "error");
-        playSound.error(); // 🔊 SOM DE ERRO
+    try {
+      const { id } = deletionTarget;
+      // 1. Find all attendance records for this employee
+      const attendanceRef = collection(db, "attendance");
+      const q = query(attendanceRef, where("employeeId", "==", id));
+      const snapshot = await getDocs(q);
+
+      // 2. Delete all found attendance records in a batch
+      if (!snapshot.empty) {
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${id}.`);
       }
+
+      // 3. Delete the employee document itself
+      await deleteDoc(doc(db, "employees", id));
+      
+      showToast("Funcionário e todos os seus dados foram removidos.", "success");
+      playSound.click(); // 🔊 SOM DE CLIQUE
+    } catch (error) {
+      console.error("Error deleting employee and their records:", error);
+      showToast("Erro ao remover funcionário e seus dados.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
+    } finally {
+      setDeletionTarget(null); // Close modal
     }
   };
 
@@ -2566,7 +2574,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                       className="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-cyan-500/10 transition-all" title="Editar"
                                     > <Edit3 className="w-4 h-4"/> </button>
                                     <button 
-                                      onClick={(e) => { e.stopPropagation(); handleDeleteEmployee(emp.id); }} 
+                                      onClick={(e) => { e.stopPropagation(); confirmDeleteEmployee(emp); }} 
                                       className="text-slate-500 hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-all" title="Excluir"
                                     > <Trash2 className="w-4 h-4"/> </button>
                                   </div>
@@ -2669,6 +2677,41 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                     className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
                   >
                     Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Deletion Confirmation Modal */}
+          {deletionTarget && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] relative">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                    <Trash2 className="w-6 h-6 text-red-400"/>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-1">Confirmar Exclusão</h2>
+                    <p className="text-slate-400 text-sm">
+                      Tem certeza que deseja excluir permanentemente <strong>{deletionTarget.name}</strong> e todos os seus registros de ponto?
+                    </p>
+                    <p className="text-amber-400 text-xs mt-2 font-bold uppercase">Essa ação não pode ser desfeita.</p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-4 mt-8">
+                  <button 
+                    onClick={() => setDeletionTarget(null)}
+                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={executeDeleteEmployee}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-sm rounded-lg flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Permanentemente
                   </button>
                 </div>
               </div>
