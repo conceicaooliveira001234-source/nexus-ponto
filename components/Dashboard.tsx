@@ -595,34 +595,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
 
-  // -- Helper: Check Shift Visibility --
-  const isShiftVisible = (shift: Shift) => {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    
-    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
-    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
-    
-    let entryMinutes = entryH * 60 + entryM;
-    let exitMinutes = exitH * 60 + exitM;
-    
-    // Janela de visibilidade: 6 horas antes da entrada até 6 horas depois da saída
-    // Isso permite ver o turno próximo e o turno recém-encerrado (para saída tardia)
-    const VISIBILITY_PADDING_MINUTES = 6 * 60; 
-    
-    // Lógica de intervalo circular para lidar com meia-noite
-    const startWindow = (entryMinutes - VISIBILITY_PADDING_MINUTES + 1440) % 1440;
-    const endWindow = (exitMinutes + VISIBILITY_PADDING_MINUTES) % 1440;
-    
-    if (startWindow < endWindow) {
-        // Janela normal (ex: 04:00 as 21:00)
-        return currentMinutes >= startWindow && currentMinutes <= endWindow;
-    } else {
-        // Janela cruza meia noite (ex: 18:00 as 10:00)
-        return currentMinutes >= startWindow || currentMinutes <= endWindow;
-    }
-  };
-
   // -- Handlers --
 
   const handleSaveSettings = async (e: React.FormEvent) => {
