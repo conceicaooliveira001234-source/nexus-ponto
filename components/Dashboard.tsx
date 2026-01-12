@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History
+  AlertCircle, Info, Calendar, History, Building2
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -419,20 +419,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   useEffect(() => {
     if (!employeeContext) return;
 
-    // Load current location details
-    const loadLocation = async () => {
-      try {
-        const locationDoc = await getDoc(doc(db, "locations", employeeContext.locationId));
-        if (locationDoc.exists()) {
-          setCurrentLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
-          console.log('📍 Local de trabalho carregado:', locationDoc.data());
+    // If locationId is present in context (legacy or persisted), load it
+    if (employeeContext.locationId) {
+        const loadLocation = async () => {
+        try {
+            const locationDoc = await getDoc(doc(db, "locations", employeeContext.locationId!));
+            if (locationDoc.exists()) {
+            setCurrentLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
+            console.log('📍 Local de trabalho carregado:', locationDoc.data());
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar local:', error);
         }
-      } catch (error) {
-        console.error('❌ Erro ao carregar local:', error);
-      }
-    };
-
-    loadLocation();
+        };
+        loadLocation();
+    }
 
     // Listen for attendance records
     if (identifiedEmployee) {
@@ -1060,11 +1061,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setIsScanning(true);
     try {
       // Find employee by CPF
-      const found = employees.find(e => 
-        e.cpf === cpfForLogin && e.locationIds?.includes(employeeContext?.locationId || '')
-      );
+      const found = employees.find(e => e.cpf === cpfForLogin);
 
-      if (!found) throw new Error("CPF não encontrado neste local.");
+      if (!found) throw new Error("CPF não encontrado.");
 
       if (found.pin === pinForLogin) {
          setIdentifiedEmployee(found);
@@ -1123,13 +1122,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('✅ Rosto detectado no vídeo');
       console.log('📊 Confiança da detecção:', detection.detection.score);
 
-      // 2. Get Candidates for THIS location
-      const candidates = employees.filter(e => e.locationIds?.includes(employeeContext.locationId) && e.photoBase64);
+      // 2. Get Candidates for THIS company (all employees with photo)
+      const candidates = employees.filter(e => e.photoBase64);
 
-      console.log(`👥 Encontrados ${candidates.length} funcionários cadastrados neste local`);
+      console.log(`👥 Encontrados ${candidates.length} funcionários cadastrados`);
 
       if (candidates.length === 0) {
-        throw new Error("Nenhum funcionário com foto cadastrado neste local.");
+        throw new Error("Nenhum funcionário com foto cadastrado.");
       }
 
       // 3. Match against candidates
@@ -1192,7 +1191,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- Attendance (Registro de Ponto) Functions --
 
   const startAttendanceFlow = async (type: AttendanceType) => {
-    if (!employeeContext || !currentLocation || !identifiedEmployee) return;
+    if (!employeeContext || !identifiedEmployee) return;
+
+    if (!currentLocation) {
+        showToast("Por favor, selecione seu local de trabalho antes de registrar o ponto.", "error");
+        return;
+    }
 
     console.log(`⏰ Iniciando registro de ponto: ${type}`);
     setAttendanceType(type);
@@ -1378,8 +1382,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         employeeId: identifiedEmployee.id,
         employeeName: identifiedEmployee.name,
         companyId: employeeContext.companyId,
-        locationId: employeeContext.locationId,
-        locationName: employeeContext.locationName,
+        locationId: currentLocation.id,
+        locationName: currentLocation.name,
         timestamp: now,
         type: attendanceType,
         latitude: currentPosition.latitude,
@@ -2281,7 +2285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                       Iniciando reconhecimento facial...
                     </p>
                     <p className="text-fuchsia-400 text-xs font-mono mb-6">
-                      Local: {employeeContext?.locationName}
+                      {employeeContext?.companyName}
                     </p>
 
                     <div className="bg-slate-950/50 border border-slate-700 rounded-lg p-4 mb-6">
@@ -2555,11 +2559,43 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   </div>
                   <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                   
+                  {/* Location Selector */}
+                  <div className="w-full max-w-md mb-6">
+                    <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block text-left">Local de Trabalho</label>
+                    <div className="relative">
+                      <select 
+                        value={currentLocation?.id || ''} 
+                        onChange={(e) => {
+                          const loc = locations.find(l => l.id === e.target.value);
+                          if (loc) {
+                            setCurrentLocation(loc);
+                            showToast(`Local selecionado: ${loc.name}`, 'success');
+                          }
+                        }}
+                        className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors appearance-none"
+                      >
+                        <option value="" disabled>Selecione um local...</option>
+                        {locations.map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.name}</option>
+                        ))}
+                      </select>
+                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-500 pointer-events-none" />
+                      <div className="absolute right-3 top-3 pointer-events-none">
+                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
+                    {!currentLocation && (
+                      <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Selecione um local para registrar ponto
+                      </p>
+                    )}
+                  </div>
+
                   {/* Attendance Type Buttons */}
                   <div className="w-full max-w-md space-y-3 mb-6">
                     <button 
                       onClick={() => startAttendanceFlow('ENTRY')}
-                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
@@ -2567,7 +2603,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('BREAK_START')}
-                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
@@ -2575,7 +2611,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('BREAK_END')}
-                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
@@ -2583,16 +2619,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('EXIT')}
-                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
                     </button>
                   </div>
                   
-                  <p className="mt-4 text-xs text-slate-500 flex items-center gap-2 justify-center">
-                    <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400 truncate max-w-[200px]">{employeeContext?.locationName}</span>
-                  </p>
+                  {currentLocation && (
+                    <p className="mt-4 text-xs text-slate-500 flex items-center gap-2 justify-center">
+                      <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400 truncate max-w-[200px]">{currentLocation.name}</span>
+                    </p>
+                  )}
                </div>
 
                <div className="space-y-4">

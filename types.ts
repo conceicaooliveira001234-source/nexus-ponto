@@ -57,8 +57,8 @@ export interface Employee {
 export interface EmployeeContext {
   companyId: string;
   companyName: string;
-  locationId: string;
-  locationName: string;
+  locationId?: string;
+  locationName?: string;
 }
 
 export type AttendanceType = 'ENTRY' | 'BREAK_START' | 'BREAK_END' | 'EXIT';
