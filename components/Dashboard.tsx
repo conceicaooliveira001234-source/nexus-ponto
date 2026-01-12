@@ -1060,15 +1060,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setDeletionTarget({ id: employee.id, name: employee.name });
   };
 
-  const executeDeleteEmployee = async () => {
-    if (!deletionTarget) return;
-
-    const targetId = deletionTarget.id;
+  const executeDeleteEmployee = async (id: string, name: string) => {
+    if (!id) return;
 
     try {
       // 1. Find all attendance records for this employee
       const attendanceRef = collection(db, "attendance");
-      const q = query(attendanceRef, where("employeeId", "==", targetId));
+      const q = query(attendanceRef, where("employeeId", "==", id));
       const snapshot = await getDocs(q);
 
       // 2. Delete all found attendance records in a batch
@@ -1078,16 +1076,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           batch.delete(doc.ref);
         });
         await batch.commit();
-        console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${targetId}.`);
+        console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${id}.`);
       }
 
       // 3. Delete the employee document itself
-      await deleteDoc(doc(db, "employees", targetId));
+      await deleteDoc(doc(db, "employees", id));
       
-      showToast("Funcionário e todos os seus dados foram removidos.", "success");
+      showToast(`Funcionário "${name}" e todos os seus dados foram removidos.`, "success");
       playSound.click(); // 🔊 SOM DE CLIQUE
     } catch (error) {
-      console.error("Error deleting employee and their records:", error);
+      console.error(`Error deleting employee ${id} and their records:`, error);
       showToast("Erro ao remover funcionário e seus dados.", "error");
       playSound.error(); // 🔊 SOM DE ERRO
     } finally {
@@ -2708,7 +2706,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                     Cancelar
                   </button>
                   <button 
-                    onClick={executeDeleteEmployee}
+                    onClick={() => deletionTarget && executeDeleteEmployee(deletionTarget.id, deletionTarget.name)}
                     className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-sm rounded-lg flex items-center gap-2"
                   >
                     <Trash2 className="w-4 h-4" />
