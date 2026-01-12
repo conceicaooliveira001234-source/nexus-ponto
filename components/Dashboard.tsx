@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar
+  AlertCircle, Info, Calendar, History
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -23,6 +23,7 @@ interface DashboardProps {
 
 type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
+type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext }) => {
   const isCompany = role === UserRole.COMPANY;
@@ -100,7 +101,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [isIdentityConfirmed, setIsIdentityConfirmed] = useState(false);
   
   // -- Attendance History States --
-  const [showHistoryView, setShowHistoryView] = useState(false);
+  const [activeEmployeeTab, setActiveEmployeeTab] = useState<EmployeeViewTab>('DASHBOARD');
   const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
   const [historyRecords, setHistoryRecords] = useState<AttendanceRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -536,7 +537,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // -- Fetch History Effect --
   useEffect(() => {
-    if (showHistoryView && identifiedEmployee) {
+    if (activeEmployeeTab === 'HISTORY' && identifiedEmployee) {
       const fetchHistory = async () => {
         setIsLoadingHistory(true);
         try {
@@ -587,7 +588,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
       fetchHistory();
     }
-  }, [showHistoryView, historyDate, identifiedEmployee]);
+  }, [activeEmployeeTab, historyDate, identifiedEmployee]);
 
   // -- Handlers --
 
@@ -2415,7 +2416,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
 
   return (
-    <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center">
+    <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center pb-24">
       <TechBackground />
       <div className="relative z-30 w-full max-w-4xl">
          {/* Header */}
@@ -2436,7 +2437,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
          </div>
 
-         {showHistoryView ? (
+         {activeEmployeeTab === 'HISTORY' ? (
             // HISTORY VIEW
             <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between mb-6">
@@ -2444,12 +2445,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   <Calendar className="w-6 h-6 text-cyan-400" />
                   Histórico de Pontos
                 </h2>
-                <button 
-                  onClick={() => setShowHistoryView(false)}
-                  className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
               </div>
 
               {/* Date Filter */}
@@ -2620,12 +2615,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                          })
                        )}
                     </div>
-                    <button 
-                      onClick={() => setShowHistoryView(true)}
-                      className="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Calendar className="w-4 h-4" /> Ver Histórico Completo
-                    </button>
                  </div>
                </div>
             </div>
@@ -2795,6 +2784,27 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
              </button>
            </div>
          </div>
+      </div>
+
+      {/* Navigation Menu */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/90 backdrop-blur-xl border border-slate-700 rounded-full px-6 py-3 shadow-2xl flex items-center gap-8">
+        <button 
+          onClick={() => { setActiveEmployeeTab('DASHBOARD'); playSound.click(); }}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeEmployeeTab === 'DASHBOARD' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <LayoutDashboard className={`w-6 h-6 ${activeEmployeeTab === 'DASHBOARD' ? 'fill-cyan-400/20' : ''}`} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Painel</span>
+        </button>
+        
+        <div className="w-px h-8 bg-slate-800"></div>
+
+        <button 
+          onClick={() => { setActiveEmployeeTab('HISTORY'); playSound.click(); }}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeEmployeeTab === 'HISTORY' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <List className={`w-6 h-6 ${activeEmployeeTab === 'HISTORY' ? 'fill-cyan-400/20' : ''}`} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Histórico</span>
+        </button>
       </div>
     </div>
   );
