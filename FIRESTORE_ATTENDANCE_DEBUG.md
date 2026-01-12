@@ -92,14 +92,17 @@ service cloud.firestore {
     
     // Collection: attendance (CRÍTICO!)
     match /attendance/{attendanceId} {
-      // Permitir leitura para todos os registros da mesma empresa
+      // Permitir leitura para todos os registros
       allow read: if true;
       
-      // Permitir criação de novos registros (ESSENCIAL!)
-      allow create: if true;
+      // Permitir criação de novos registros se forem válidos (ESSENCIAL!)
+      allow create: if request.resource.data.verified == true
+                    && request.resource.data.employeeId is string
+                    && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
       
       // Permitir atualização e exclusão apenas para autenticados
-      allow update, delete: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null || (resource.data.isTest == true);
     }
     
     // Collection: users

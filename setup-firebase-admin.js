@@ -84,13 +84,15 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       // LEITURA: Qualquer pessoa pode ler (para o histórico)
       allow read: if true;
-      
-      // CRIAÇÃO: Qualquer pessoa pode criar (para registrar ponto)
-      allow create: if true;
-      
+
+      // CRIAÇÃO: Apenas registros válidos do app de ponto
+      allow create: if request.resource.data.verified == true
+                    && request.resource.data.employeeId is string
+                    && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
+
       // ATUALIZAÇÃO: Apenas usuários autenticados (admins)
       allow update: if request.auth != null;
-      
+
       // EXCLUSÃO: Apenas admins, ou para limpar documentos de teste
       allow delete: if request.auth != null || (resource.data.isTest == true);
     }

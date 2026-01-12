@@ -55,7 +55,10 @@ service cloud.firestore {
     // Funcionários usam reconhecimento facial (não Firebase Auth)
     match /attendance/{attendanceId} {
       allow read: if true;
-      allow create: if true;
+      // Permite criar apenas se os dados essenciais estiverem presentes
+      allow create: if request.resource.data.verified == true
+                    && request.resource.data.employeeId is string
+                    && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
       allow update: if request.auth != null;
       // Permite deletar se for admin ou se for um documento de teste
       allow delete: if request.auth != null || (resource.data.isTest == true);
