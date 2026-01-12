@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info
+  AlertCircle, Info, Calendar
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -101,10 +101,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   
   // -- Attendance History States --
   const [showHistoryView, setShowHistoryView] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('today');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [filteredRecords, setFilteredRecords] = useState<AttendanceRecord[]>([]);
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyRecords, setHistoryRecords] = useState<AttendanceRecord[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [selectedHistoryLocation, setSelectedHistoryLocation] = useState<string>('');
 
   // -- Notification State (Toast) --
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
@@ -533,6 +533,61 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       };
     }
   }, [employeeContext, identifiedEmployee]);
+
+  // -- Fetch History Effect --
+  useEffect(() => {
+    if (showHistoryView && identifiedEmployee) {
+      const fetchHistory = async () => {
+        setIsLoadingHistory(true);
+        try {
+          // Create date range for the selected date (local time)
+          const [year, month, day] = historyDate.split('-').map(Number);
+          const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+          const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+
+          const q = query(
+            collection(db, "attendance"),
+            where("employeeId", "==", identifiedEmployee.id),
+            where("timestamp", ">=", Timestamp.fromDate(start)),
+            where("timestamp", "<=", Timestamp.fromDate(end)),
+            orderBy("timestamp", "desc")
+          );
+
+          const snapshot = await getDocs(q);
+          const records = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate() || new Date()
+            } as AttendanceRecord;
+          });
+
+          setHistoryRecords(records);
+          
+          // Extract unique locations for tabs
+          const uniqueLocations = Array.from(new Set(records.map(r => r.locationName)));
+          
+          // Update selected location if needed
+          if (uniqueLocations.length > 0) {
+            if (!selectedHistoryLocation || !uniqueLocations.includes(selectedHistoryLocation)) {
+              setSelectedHistoryLocation(uniqueLocations[0]);
+            }
+          } else {
+            setSelectedHistoryLocation('');
+          }
+
+        } catch (error) {
+          console.error("Error fetching history:", error);
+          showToast("Erro ao carregar histórico.", "error");
+        } finally {
+          setIsLoadingHistory(false);
+        }
+      };
+
+      fetchHistory();
+    }
+  }, [showHistoryView, historyDate, identifiedEmployee]);
 
   // -- Handlers --
 
@@ -2381,91 +2436,200 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
          </div>
 
-         {/* Time Clock Action */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-            <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-2xl">
-               <div className="text-5xl md:text-6xl font-tech font-bold text-white mb-2 tracking-widest">
-                 {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-               </div>
-               <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-               
-               {/* Attendance Type Buttons */}
-               <div className="w-full max-w-md space-y-3 mb-6">
-                 <button 
-                   onClick={() => startAttendanceFlow('ENTRY')}
-                   disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                 >
-                   <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
-                 </button>
+         {showHistoryView ? (
+            // HISTORY VIEW
+            <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Calendar className="w-6 h-6 text-cyan-400" />
+                  Histórico de Pontos
+                </h2>
+                <button 
+                  onClick={() => setShowHistoryView(false)}
+                  className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Voltar
+                </button>
+              </div>
 
-                 <button 
-                   onClick={() => startAttendanceFlow('BREAK_START')}
-                   disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                 >
-                   <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
-                 </button>
+              {/* Date Filter */}
+              <div className="mb-6">
+                <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block">Selecione a Data</label>
+                <input 
+                  type="date" 
+                  value={historyDate}
+                  onChange={(e) => setHistoryDate(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 text-white rounded-lg p-3 w-full md:w-auto focus:border-cyan-500 outline-none"
+                />
+              </div>
 
-                 <button 
-                   onClick={() => startAttendanceFlow('BREAK_END')}
-                   disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                 >
-                   <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
-                 </button>
+              {/* Location Tabs */}
+              {isLoadingHistory ? (
+                <div className="py-10 text-center">
+                  <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">Carregando histórico...</p>
+                </div>
+              ) : historyRecords.length === 0 ? (
+                <div className="py-10 text-center border border-dashed border-slate-800 rounded-xl">
+                  <p className="text-slate-500">Nenhum registro encontrado nesta data.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex overflow-x-auto gap-2 mb-4 pb-2 custom-scrollbar">
+                    {Array.from(new Set(historyRecords.map(r => r.locationName))).map(locName => (
+                      <button
+                        key={locName}
+                        onClick={() => setSelectedHistoryLocation(locName)}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${
+                          selectedHistoryLocation === locName 
+                            ? 'bg-cyan-600 text-white shadow-lg' 
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        <MapPin className="w-3 h-3 inline mr-2" />
+                        {locName}
+                      </button>
+                    ))}
+                  </div>
 
-                 <button 
-                   onClick={() => startAttendanceFlow('EXIT')}
-                   disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                 >
-                   <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
-                 </button>
-               </div>
-               
-               <p className="mt-4 text-xs text-slate-500 flex items-center gap-2 justify-center">
-                 <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400 truncate max-w-[200px]">{employeeContext?.locationName}</span>
-               </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-6">
-                 <h3 className="font-bold text-white mb-4 flex items-center gap-2"><List className="w-4 h-4 text-cyan-400"/> Histórico Recente</h3>
-                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    {attendanceRecords.length === 0 ? (
-                      <p className="text-slate-500 text-sm text-center py-4">Nenhum registro ainda</p>
-                    ) : (
-                      attendanceRecords.map((record) => {
-                        const typeColors = {
-                          ENTRY: 'border-green-500',
-                          BREAK_START: 'border-yellow-500',
-                          BREAK_END: 'border-blue-500',
-                          EXIT: 'border-red-500'
-                        };
+                  {/* Records List */}
+                  <div className="space-y-3">
+                    {historyRecords
+                      .filter(r => r.locationName === selectedHistoryLocation)
+                      .map(record => {
                         const typeLabels = {
                           ENTRY: 'Entrada',
                           BREAK_START: 'Início Pausa',
                           BREAK_END: 'Fim Pausa',
                           EXIT: 'Saída'
                         };
+                        const typeColors = {
+                          ENTRY: 'border-green-500 text-green-400',
+                          BREAK_START: 'border-yellow-500 text-yellow-400',
+                          BREAK_END: 'border-blue-500 text-blue-400',
+                          EXIT: 'border-red-500 text-red-400'
+                        };
+                        
                         return (
-                          <div key={record.id} className={`flex justify-between text-sm p-3 bg-slate-950/50 rounded border-l-2 ${typeColors[record.type]}`}>
+                          <div key={record.id} className={`bg-slate-950/50 border-l-4 ${typeColors[record.type].split(' ')[0]} border-y border-r border-slate-800 p-4 rounded-r-lg flex justify-between items-center`}>
                             <div>
-                              <span className="text-slate-300">{typeLabels[record.type]}</span>
-                              <div className="text-xs text-slate-500 mt-1">
-                                {record.timestamp.toLocaleDateString('pt-BR')}
+                              <div className={`font-bold text-sm ${typeColors[record.type].split(' ')[1]}`}>
+                                {typeLabels[record.type]}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                <Clock className="w-3 h-3" /> {record.timestamp.toLocaleTimeString('pt-BR')}
                               </div>
                             </div>
-                            <span className="font-mono text-white">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <div className="text-right">
+                               <div className="text-xs text-slate-400 font-mono">
+                                 {record.distance ? `${record.distance.toFixed(0)}m` : 'N/A'}
+                               </div>
+                               {record.verified && (
+                                 <div className="text-[10px] text-green-500 flex items-center justify-end gap-1 mt-1">
+                                   <CheckCircle className="w-3 h-3" /> Validado
+                                 </div>
+                               )}
+                            </div>
                           </div>
                         );
-                      })
-                    )}
-                 </div>
-              </div>
+                      })}
+                  </div>
+                </>
+              )}
             </div>
-         </div>
+         ) : (
+            // MAIN DASHBOARD VIEW
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+               <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-2xl">
+                  <div className="text-5xl md:text-6xl font-tech font-bold text-white mb-2 tracking-widest">
+                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                  
+                  {/* Attendance Type Buttons */}
+                  <div className="w-full max-w-md space-y-3 mb-6">
+                    <button 
+                      onClick={() => startAttendanceFlow('ENTRY')}
+                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                    >
+                      <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
+                    </button>
+
+                    <button 
+                      onClick={() => startAttendanceFlow('BREAK_START')}
+                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                    >
+                      <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
+                    </button>
+
+                    <button 
+                      onClick={() => startAttendanceFlow('BREAK_END')}
+                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                    >
+                      <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
+                    </button>
+
+                    <button 
+                      onClick={() => startAttendanceFlow('EXIT')}
+                      disabled={isCheckingLocation || isRegisteringAttendance}
+                      className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+                    >
+                      <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
+                    </button>
+                  </div>
+                  
+                  <p className="mt-4 text-xs text-slate-500 flex items-center gap-2 justify-center">
+                    <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400 truncate max-w-[200px]">{employeeContext?.locationName}</span>
+                  </p>
+               </div>
+
+               <div className="space-y-4">
+                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-6">
+                    <h3 className="font-bold text-white mb-4 flex items-center gap-2"><List className="w-4 h-4 text-cyan-400"/> Histórico Recente</h3>
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                       {attendanceRecords.length === 0 ? (
+                         <p className="text-slate-500 text-sm text-center py-4">Nenhum registro ainda</p>
+                       ) : (
+                         attendanceRecords.map((record) => {
+                           const typeColors = {
+                             ENTRY: 'border-green-500',
+                             BREAK_START: 'border-yellow-500',
+                             BREAK_END: 'border-blue-500',
+                             EXIT: 'border-red-500'
+                           };
+                           const typeLabels = {
+                             ENTRY: 'Entrada',
+                             BREAK_START: 'Início Pausa',
+                             BREAK_END: 'Fim Pausa',
+                             EXIT: 'Saída'
+                           };
+                           return (
+                             <div key={record.id} className={`flex justify-between text-sm p-3 bg-slate-950/50 rounded border-l-2 ${typeColors[record.type]}`}>
+                               <div>
+                                 <span className="text-slate-300">{typeLabels[record.type]}</span>
+                                 <div className="text-xs text-slate-500 mt-1">
+                                   {record.timestamp.toLocaleDateString('pt-BR')}
+                                 </div>
+                               </div>
+                               <span className="font-mono text-white">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                             </div>
+                           );
+                         })
+                       )}
+                    </div>
+                    <button 
+                      onClick={() => setShowHistoryView(true)}
+                      className="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-4 h-4" /> Ver Histórico Completo
+                    </button>
+                 </div>
+               </div>
+            </div>
+         )}
 
          {/* Attendance Flow Modal */}
          {showAttendanceFlow && (
