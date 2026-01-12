@@ -141,6 +141,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }, 5000);
   }, []);
 
+  // -- Auto-select last used location --
+  useEffect(() => {
+    if (role === UserRole.EMPLOYEE && locations.length > 0 && !currentLocation && identifiedEmployee) {
+      const savedLocationId = localStorage.getItem('nexus_selected_location_id');
+      if (savedLocationId) {
+        // Check if employee has access to this location
+        const hasAccess = identifiedEmployee.locationIds?.includes(savedLocationId);
+        if (hasAccess) {
+          const savedLocation = locations.find(loc => loc.id === savedLocationId);
+          if (savedLocation) {
+            console.log(`📍 Restaurando local de trabalho salvo: ${savedLocation.name}`);
+            setCurrentLocation(savedLocation);
+          }
+        }
+      }
+    }
+  }, [role, locations, currentLocation, identifiedEmployee]);
+
   const todayAttendance = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -3241,6 +3259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                           const loc = locations.find(l => l.id === e.target.value);
                           if (loc) {
                             setCurrentLocation(loc);
+                            localStorage.setItem('nexus_selected_location_id', loc.id);
                             showToast(`Local selecionado: ${loc.name}`, 'success');
                           }
                         }}
