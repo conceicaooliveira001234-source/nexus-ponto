@@ -209,7 +209,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               body: `Faltam 3 minutos para o seu horário de ${nextEvent.label}.`,
               icon: '/pwa-192x192.png',
               badge: '/pwa-192x192.png', // Ícone para a barra de status
-              vibrate: [200, 100, 200],
               sound: '/sounds/alert.mp3' // Opcional: um som customizado
             });
             console.log(`🔔 Notificação agendada para "${nextEvent.label}" às ${notificationTime.toLocaleTimeString('pt-BR')}.`);
