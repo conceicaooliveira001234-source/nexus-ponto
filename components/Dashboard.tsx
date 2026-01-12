@@ -630,6 +630,121 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
 
+  const dailySummaries = useMemo(() => {
+    if (!historyRecords.length || !identifiedEmployee?.shifts || identifiedEmployee.shifts.length === 0) {
+      return [];
+    }
+
+    const timeToMinutes = (timeStr: string | undefined): number => {
+      if (!timeStr) return 0;
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const formatMinutes = (mins: number) => {
+        const sign = mins < 0 ? '-' : '';
+        const absMins = Math.abs(mins);
+        const h = Math.floor(absMins / 60);
+        const m = Math.round(absMins % 60);
+        return `${sign}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    // 1. Group records by date string
+    const recordsByDay = historyRecords.reduce((acc, record) => {
+      const day = record.timestamp.toISOString().split('T')[0];
+      if (!acc[day]) {
+        acc[day] = [];
+      }
+      acc[day].push(record);
+      return acc;
+    }, {} as Record<string, AttendanceRecord[]>);
+
+    // 2. Process each day
+    return Object.keys(recordsByDay).sort().reverse().map(day => {
+      const records = recordsByDay[day];
+      const sortedRecords = [...records].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      
+      const entryRecord = sortedRecords.find(r => r.type === 'ENTRY');
+      const exitRecord = sortedRecords.find(r => r.type === 'EXIT');
+
+      // Find associated shift (best guess based on entry time)
+      let associatedShift: Shift | null = null;
+      if (entryRecord && identifiedEmployee.shifts.length > 0) {
+        const entryTimeInMinutes = entryRecord.timestamp.getHours() * 60 + entryRecord.timestamp.getMinutes();
+        let closestShift: Shift | null = null;
+        let minDiff = Infinity;
+
+        for (const shift of identifiedEmployee.shifts) {
+          const shiftEntryMinutes = timeToMinutes(shift.entryTime);
+          if (shiftEntryMinutes === 0) continue;
+          
+          let diff = Math.abs(entryTimeInMinutes - shiftEntryMinutes);
+          if (diff > 12 * 60) {
+            diff = 24 * 60 - diff;
+          }
+
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestShift = shift;
+          }
+        }
+        associatedShift = closestShift;
+      } else {
+        // Fallback to first shift if no entry record or other logic fails
+        associatedShift = identifiedEmployee.shifts[0];
+      }
+      
+      // Calculate total expected work minutes from shift
+      let totalWorkMinutes = 0;
+      if (associatedShift) {
+        const entry = timeToMinutes(associatedShift.entryTime);
+        const exit = timeToMinutes(associatedShift.exitTime);
+        const breakStart = timeToMinutes(associatedShift.breakTime);
+        const breakEnd = timeToMinutes(associatedShift.breakEndTime);
+
+        let shiftDuration = exit - entry;
+        if (shiftDuration < 0) shiftDuration += 24 * 60;
+        
+        let breakDuration = breakEnd - breakStart;
+        if (breakDuration < 0) breakDuration += 24 * 60;
+        
+        totalWorkMinutes = shiftDuration - (breakDuration > 0 ? breakDuration : 0);
+      }
+
+      // Calculate actual worked minutes from records
+      let workedMinutes = 0;
+      let totalBreakMinutes = 0;
+      
+      if (entryRecord && exitRecord) {
+        workedMinutes = (exitRecord.timestamp.getTime() - entryRecord.timestamp.getTime()) / (1000 * 60);
+
+        const breakStarts = sortedRecords.filter(r => r.type === 'BREAK_START');
+        const breakEnds = sortedRecords.filter(r => r.type === 'BREAK_END');
+        
+        for (let i = 0; i < Math.min(breakStarts.length, breakEnds.length); i++) {
+          const breakDuration = (breakEnds[i].timestamp.getTime() - breakStarts[i].timestamp.getTime()) / (1000 * 60);
+          if (breakDuration > 0) {
+            totalBreakMinutes += breakDuration;
+          }
+        }
+        
+        workedMinutes -= totalBreakMinutes;
+      }
+
+      const difference = workedMinutes - totalWorkMinutes;
+      
+      return {
+        day,
+        records,
+        summary: {
+          totalToWork: formatMinutes(totalWorkMinutes),
+          totalWorked: formatMinutes(workedMinutes),
+          hoursOwed: difference < 0 ? formatMinutes(difference) : '00:00',
+          overtime: difference > 0 ? formatMinutes(difference) : '00:00',
+        }
+      };
+    });
+  }, [historyRecords, identifiedEmployee?.shifts]);
 
   // 🔥 Auto-start camera when component mounts (Employee Login)
   useEffect(() => {
@@ -2750,65 +2865,65 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                     ))}
                   </div>
 
-                  {/* Records List */}
-                  <div className="space-y-3">
-                    {historyRecords
-                      .filter(r => r.locationName === selectedHistoryLocation)
-                      .map(record => {
-                        const typeLabels = {
-                          ENTRY: 'Entrada',
-                          BREAK_START: 'Início Pausa',
-                          BREAK_END: 'Fim Pausa',
-                          EXIT: 'Saída'
-                        };
-                        const typeColors = {
-                          ENTRY: 'border-green-500 text-green-400',
-                          BREAK_START: 'border-yellow-500 text-yellow-400',
-                          BREAK_END: 'border-blue-500 text-blue-400',
-                          EXIT: 'border-red-500 text-red-400'
-                        };
+                  {/* Daily Summary and Records List */}
+                  <div className="space-y-6">
+                    {dailySummaries
+                      .filter(daily => daily.records.some(r => r.locationName === selectedHistoryLocation))
+                      .map(daily => (
+                      <div key={daily.day} className="bg-slate-950/30 p-4 rounded-lg border border-slate-800">
+                        <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">
+                          {new Date(daily.day + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                        </h3>
                         
-                        const statusColors = {
-                          PERFECT: 'text-green-400',
-                          GOOD: 'text-yellow-400',
-                          LATE: 'text-red-400',
-                          NEUTRAL: 'text-slate-400',
-                        };
-                        const statusColor = statusColors[record.punctualityStatus as keyof typeof statusColors] || 'text-slate-400';
-
-                        return (
-                          <div key={record.id} className={`bg-slate-950/50 border-l-4 ${typeColors[record.type].split(' ')[0]} border-y border-r border-slate-800 p-4 rounded-r-lg flex justify-between items-center`}>
-                            <div>
-                              <div className={`font-bold text-sm ${typeColors[record.type].split(' ')[1]}`}>
-                                {typeLabels[record.type]}
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                                <Clock className="w-3 h-3" /> {record.timestamp.toLocaleDateString('pt-BR')} - {record.timestamp.toLocaleTimeString('pt-BR')}
-                              </div>
-                              {record.punctualityMessage && (
-                                <div className={`text-xs font-bold mt-2 ${statusColor}`}>
-                                  {record.punctualityMessage}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                               <div className="text-xs text-slate-400 font-mono">
-                                 {record.distance ? `${record.distance.toFixed(0)}m` : 'N/A'}
-                               </div>
-                               {record.verified && (
-                                 <div className="text-[10px] text-green-500 flex items-center justify-end gap-1 mt-1">
-                                   <CheckCircle className="w-3 h-3" /> Validado
-                                 </div>
-                               )}
-                               {record.score !== undefined && (
-                                 <div className={`text-[10px] font-bold flex items-center justify-end gap-1 mt-1 ${statusColor}`}>
-                                   <Trophy className="w-3 h-3" /> {record.score} XP
-                                 </div>
-                               )}
-                            </div>
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-4">
+                          <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <p className="text-xs text-cyan-400 font-mono">Total a Trabalhar</p>
+                            <p className="text-xl font-bold text-white">{daily.summary.totalToWork}</p>
                           </div>
-                        );
-                      })}
+                          <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <p className="text-xs text-green-400 font-mono">Horas Trabalhadas</p>
+                            <p className="text-xl font-bold text-white">{daily.summary.totalWorked}</p>
+                          </div>
+                          <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <p className="text-xs text-yellow-400 font-mono">Horas Devendo</p>
+                            <p className="text-xl font-bold text-white">{daily.summary.hoursOwed}</p>
+                          </div>
+                          <div className="bg-slate-900 p-3 rounded-lg text-center border border-slate-700">
+                            <p className="text-xs text-fuchsia-400 font-mono">Horas Extras</p>
+                            <p className="text-xl font-bold text-white">{daily.summary.overtime}</p>
+                          </div>
+                        </div>
+
+                        {/* Records List for the day */}
+                        <div className="space-y-2">
+                          {daily.records
+                            .filter(r => r.locationName === selectedHistoryLocation)
+                            .map(record => {
+                              const typeLabels = { ENTRY: 'Entrada', BREAK_START: 'Início Pausa', BREAK_END: 'Fim Pausa', EXIT: 'Saída' };
+                              const typeColors = { ENTRY: 'border-green-500 text-green-400', BREAK_START: 'border-yellow-500 text-yellow-400', BREAK_END: 'border-blue-500 text-blue-400', EXIT: 'border-red-500 text-red-400' };
+                              const statusColors = { PERFECT: 'text-green-400', GOOD: 'text-yellow-400', LATE: 'text-red-400', NEUTRAL: 'text-slate-400' };
+                              const statusColor = statusColors[record.punctualityStatus as keyof typeof statusColors] || 'text-slate-400';
+
+                              return (
+                                <div key={record.id} className={`bg-slate-900/50 border-l-4 ${typeColors[record.type].split(' ')[0]} border-y border-r border-slate-800 p-3 rounded-r-lg flex justify-between items-center`}>
+                                  <div>
+                                    <div className={`font-bold text-sm ${typeColors[record.type].split(' ')[1]}`}>{typeLabels[record.type]}</div>
+                                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                                      <Clock className="w-3 h-3" /> {record.timestamp.toLocaleTimeString('pt-BR')}
+                                    </div>
+                                    {record.punctualityMessage && <div className={`text-xs font-bold mt-1 ${statusColor}`}>{record.punctualityMessage}</div>}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-xs text-slate-400 font-mono">{record.distance ? `${record.distance.toFixed(0)}m` : 'N/A'}</div>
+                                    {record.score !== undefined && <div className={`text-[10px] font-bold flex items-center justify-end gap-1 mt-1 ${statusColor}`}><Trophy className="w-3 h-3" /> {record.score} XP</div>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
