@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2
+  AlertCircle, Info, Calendar, History, Building2, Briefcase
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -98,6 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isRegisteringAttendance, setIsRegisteringAttendance] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<ServiceLocation | null>(null);
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null); // Turno selecionado
   const [isIdentityConfirmed, setIsIdentityConfirmed] = useState(false);
   
   // -- Attendance History States --
@@ -593,6 +594,34 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       fetchHistory();
     }
   }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
+
+  // -- Helper: Check Shift Visibility --
+  const isShiftVisible = (shift: Shift) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
+    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
+    
+    let entryMinutes = entryH * 60 + entryM;
+    let exitMinutes = exitH * 60 + exitM;
+    
+    // Janela de visibilidade: 6 horas antes da entrada até 6 horas depois da saída
+    // Isso permite ver o turno próximo e o turno recém-encerrado (para saída tardia)
+    const VISIBILITY_PADDING_MINUTES = 6 * 60; 
+    
+    // Lógica de intervalo circular para lidar com meia-noite
+    const startWindow = (entryMinutes - VISIBILITY_PADDING_MINUTES + 1440) % 1440;
+    const endWindow = (exitMinutes + VISIBILITY_PADDING_MINUTES) % 1440;
+    
+    if (startWindow < endWindow) {
+        // Janela normal (ex: 04:00 as 21:00)
+        return currentMinutes >= startWindow && currentMinutes <= endWindow;
+    } else {
+        // Janela cruza meia noite (ex: 18:00 as 10:00)
+        return currentMinutes >= startWindow || currentMinutes <= endWindow;
+    }
+  };
 
   // -- Handlers --
 
@@ -1190,11 +1219,100 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // -- Attendance (Registro de Ponto) Functions --
 
+  // Helper to calculate punctuality score
+  const calculatePunctualityScore = (type: AttendanceType, timestamp: Date, shift: Shift | null): { score: number, status: 'PERFECT' | 'GOOD' | 'LATE' | 'NEUTRAL', message: string, color: string } => {
+    // Default values
+    let score = 0;
+    let status: 'PERFECT' | 'GOOD' | 'LATE' | 'NEUTRAL' = 'NEUTRAL';
+    let message = '';
+    let color = 'text-slate-400';
+
+    if (!shift) return { score, status, message, color };
+
+    const now = timestamp;
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    let targetTime = 0;
+    let isEntry = false;
+
+    // Determine target time based on attendance type
+    if (type === 'ENTRY') {
+      const [h, m] = shift.entryTime.split(':').map(Number);
+      targetTime = h * 60 + m;
+      isEntry = true;
+    } else if (type === 'EXIT') {
+      const [h, m] = shift.exitTime.split(':').map(Number);
+      targetTime = h * 60 + m;
+      isEntry = false;
+    } else {
+      // Break times logic could be added here
+      return { score, status, message, color };
+    }
+
+    // Calculate difference in minutes
+    // Entry: Positive diff means late
+    // Exit: Positive diff means early (if target > current) or overtime (if current > target)
+    // Let's simplify: diff = current - target
+    const diff = currentTime - targetTime;
+    
+    // Handle midnight crossing if needed (simplified for now)
+    
+    if (isEntry) {
+      if (diff <= 0) {
+        // Early or On Time
+        score = 100;
+        status = 'PERFECT';
+        message = diff < -5 ? `Adiantado ${Math.abs(diff)}min` : 'Pontual';
+        color = 'text-green-400';
+      } else if (diff <= 10) {
+        // Tolerância
+        score = 80;
+        status = 'GOOD';
+        message = `Atraso ${diff}min (Tolerância)`;
+        color = 'text-yellow-400';
+      } else {
+        // Late
+        score = 10;
+        status = 'LATE';
+        message = `Atrasado ${diff}min`;
+        color = 'text-red-400';
+      }
+    } else {
+      // Exit
+      if (diff >= 0) {
+        // On Time or Overtime
+        score = 100;
+        status = 'PERFECT';
+        message = diff > 0 ? `Hora Extra +${diff}min` : 'Pontual';
+        color = 'text-green-400';
+      } else if (diff >= -10) {
+        // Tolerância (saindo um pouco antes)
+        score = 80;
+        status = 'GOOD';
+        message = `Saída ${Math.abs(diff)}min antes`;
+        color = 'text-yellow-400';
+      } else {
+        // Early exit
+        score = 10;
+        status = 'LATE';
+        message = `Saída Antecipada ${Math.abs(diff)}min`;
+        color = 'text-red-400';
+      }
+    }
+
+    return { score, status, message, color };
+  };
+
   const startAttendanceFlow = async (type: AttendanceType) => {
     if (!employeeContext || !identifiedEmployee) return;
 
     if (!currentLocation) {
         showToast("Por favor, selecione seu local de trabalho antes de registrar o ponto.", "error");
+        return;
+    }
+
+    if (!currentShift) {
+        showToast("Por favor, selecione seu turno de trabalho.", "error");
         return;
     }
 
@@ -1378,6 +1496,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('📦 ETAPA 5: Preparando dados para salvamento...');
       const now = new Date();
       
+      // Calculate Gamification Score
+      const { score, status, message: scoreMessage } = calculatePunctualityScore(attendanceType, now, currentShift);
+      console.log(`🎮 Gamification: Score=${score}, Status=${status}, Msg=${scoreMessage}`);
+
       const attendanceData: Omit<AttendanceRecord, 'id'> = {
         employeeId: identifiedEmployee.id,
         employeeName: identifiedEmployee.name,
@@ -1390,7 +1512,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         longitude: currentPosition.longitude,
         photoBase64: photoBase64,
         verified: true,
-        distance: distanceToLocation
+        distance: distanceToLocation,
+        score: score,
+        punctualityStatus: status
       };
 
       console.log('📋 Estrutura do documento a ser salvo:');
@@ -1406,6 +1530,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('   - photoBase64: [', photoBase64.length, 'caracteres ]');
       console.log('   - verified:', attendanceData.verified);
       console.log('   - distance:', attendanceData.distance);
+      console.log('   - score:', attendanceData.score);
+      console.log('   - punctualityStatus:', attendanceData.punctualityStatus);
 
       // ETAPA 6: SALVAMENTO NO FIRESTORE
       console.log('───────────────────────────────────────────────────────');
@@ -1500,10 +1626,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         EXIT: 'Saída'
       };
 
-      showToast(
-        `Ponto registrado: ${typeLabels[attendanceType]} - ${now.toLocaleTimeString('pt-BR')}`,
-        'success'
-      );
+      let toastMsg = `Ponto registrado: ${typeLabels[attendanceType]} - ${now.toLocaleTimeString('pt-BR')}`;
+      if (scoreMessage) {
+        toastMsg += `\n${scoreMessage}`;
+      }
+
+      showToast(toastMsg, 'success');
       playSound.attendance(); // 🔊 SOM DE PONTO REGISTRADO
 
       // Limpar estados do fluxo de registro
@@ -2422,6 +2550,49 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
 
+  // Helper to check shift visibility
+  const isShiftVisible = (shift: Shift) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
+    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
+    
+    let entryMinutes = entryH * 60 + entryM;
+    let exitMinutes = exitH * 60 + exitM;
+    
+    // Janela de visibilidade: 6 horas antes da entrada até 6 horas depois da saída
+    const VISIBILITY_PADDING_MINUTES = 6 * 60; 
+    
+    // Lógica de intervalo circular para lidar com meia-noite
+    const startWindow = (entryMinutes - VISIBILITY_PADDING_MINUTES + 1440) % 1440;
+    const endWindow = (exitMinutes + VISIBILITY_PADDING_MINUTES) % 1440;
+    
+    if (startWindow < endWindow) {
+        // Janela normal (ex: 04:00 as 21:00)
+        return currentMinutes >= startWindow && currentMinutes <= endWindow;
+    } else {
+        // Janela cruza meia noite (ex: 18:00 as 10:00)
+        return currentMinutes >= startWindow || currentMinutes <= endWindow;
+    }
+  };
+
+  // Auto-select shift if only one is visible or if location changes
+  useEffect(() => {
+    if (identifiedEmployee && identifiedEmployee.shifts) {
+      const visibleShifts = identifiedEmployee.shifts.filter(isShiftVisible);
+      if (visibleShifts.length === 1) {
+        setCurrentShift(visibleShifts[0]);
+      } else if (visibleShifts.length === 0) {
+        setCurrentShift(null);
+      }
+      // If multiple, user must select. If current selection is no longer visible, clear it.
+      if (currentShift && !isShiftVisible(currentShift)) {
+        setCurrentShift(null);
+      }
+    }
+  }, [identifiedEmployee, currentLocation]); // Re-evaluate when location changes (conceptually linked) or employee loads
+
   return (
     <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center pb-24">
       <TechBackground />
@@ -2542,6 +2713,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                    <CheckCircle className="w-3 h-3" /> Validado
                                  </div>
                                )}
+                               {record.score !== undefined && (
+                                 <div className={`text-[10px] font-bold flex items-center justify-end gap-1 mt-1 ${record.score >= 100 ? 'text-yellow-400' : record.score >= 50 ? 'text-cyan-400' : 'text-slate-500'}`}>
+                                   <Trophy className="w-3 h-3" /> {record.score} XP
+                                 </div>
+                               )}
                             </div>
                           </div>
                         );
@@ -2560,7 +2736,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                   
                   {/* Location Selector */}
-                  <div className="w-full max-w-md mb-6">
+                  <div className="w-full max-w-md mb-4">
                     <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block text-left">Local de Trabalho</label>
                     <div className="relative">
                       <select 
@@ -2584,9 +2760,44 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                       </div>
                     </div>
-                    {!currentLocation && (
+                  </div>
+
+                  {/* Shift Selector (Filtered) */}
+                  <div className="w-full max-w-md mb-6">
+                    <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block text-left">Turno de Trabalho</label>
+                    <div className="relative">
+                      <select 
+                        value={currentShift?.id || ''} 
+                        onChange={(e) => {
+                          const shift = identifiedEmployee?.shifts?.find(s => s.id === e.target.value);
+                          if (shift) {
+                            setCurrentShift(shift);
+                            showToast(`Turno selecionado: ${shift.name}`, 'success');
+                          }
+                        }}
+                        className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors appearance-none"
+                        disabled={!currentLocation}
+                      >
+                        <option value="" disabled>Selecione um turno...</option>
+                        {identifiedEmployee?.shifts?.filter(isShiftVisible).map(shift => (
+                          <option key={shift.id} value={shift.id}>
+                            {shift.name} ({shift.entryTime} - {shift.exitTime})
+                          </option>
+                        ))}
+                      </select>
+                      <Briefcase className="absolute left-3 top-3 w-4 h-4 text-slate-500 pointer-events-none" />
+                      <div className="absolute right-3 top-3 pointer-events-none">
+                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
+                    {!currentShift && currentLocation && (
                       <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Selecione um local para registrar ponto
+                        <AlertCircle className="w-3 h-3" /> Selecione um turno disponível agora
+                      </p>
+                    )}
+                    {currentLocation && identifiedEmployee?.shifts?.filter(isShiftVisible).length === 0 && (
+                      <p className="text-xs text-slate-500 mt-2">
+                        Nenhum turno disponível para este horário.
                       </p>
                     )}
                   </div>
@@ -2595,7 +2806,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   <div className="w-full max-w-md space-y-3 mb-6">
                     <button 
                       onClick={() => startAttendanceFlow('ENTRY')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
@@ -2603,7 +2814,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('BREAK_START')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
@@ -2611,7 +2822,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('BREAK_END')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
@@ -2619,7 +2830,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                     <button 
                       onClick={() => startAttendanceFlow('EXIT')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation}
+                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
                       className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     >
                       <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
@@ -2661,7 +2872,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                    {record.timestamp.toLocaleDateString('pt-BR')}
                                  </div>
                                </div>
-                               <span className="font-mono text-white">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                               <div className="text-right">
+                                 <span className="font-mono text-white block">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                 {record.score !== undefined && (
+                                   <span className={`text-[10px] font-bold ${record.score >= 100 ? 'text-yellow-400' : 'text-cyan-500'}`}>+{record.score} XP</span>
+                                 )}
+                               </div>
                              </div>
                            );
                          })
