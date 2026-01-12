@@ -6,7 +6,7 @@ import CompanyRegister from './components/auth/CompanyRegister';
 import EmployeeLogin from './components/auth/EmployeeLogin';
 import FacialOnboarding from './components/auth/FacialOnboarding';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
-import { UserRole, ViewState, CompanyData, EmployeeContext } from './types';
+import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation } from './types';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
