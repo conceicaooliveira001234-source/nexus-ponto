@@ -120,6 +120,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
 
   const [generatedLink, setGeneratedLink] = useState('');
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -156,25 +157,19 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }, []);
 
   const handleInstallClick = () => {
-    if (installPrompt) {
-      const promptEvent = installPrompt as any;
-      promptEvent.prompt();
-      promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
-        if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-          showToast('Aplicativo instalado com sucesso!', 'success');
-        } else {
-          console.log('User dismissed the install prompt');
-        }
-        setInstallPrompt(null);
-      });
-    } else {
-      // Se o prompt de instalação não estiver disponível, mostra instruções
-      showToast(
-        'Para instalar: Use o menu do navegador (⋮ ou ...) e procure por "Instalar aplicativo" ou "Adicionar à tela inicial".', 
-        'info'
-      );
-    }
+    if (!installPrompt) return;
+    
+    const promptEvent = installPrompt as any;
+    promptEvent.prompt();
+    promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+        showToast('Aplicativo instalado com sucesso!', 'success');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      setInstallPrompt(null);
+    });
   };
 
   // -- Timer Effect for Real-time Updates --
@@ -2971,13 +2966,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                </div>
             </div>
             <div className="flex items-center gap-4">
-              {!isPwaInstalled && (
+              {installPrompt && !isPwaInstalled && (
                 <button 
                   onClick={handleInstallClick} 
-                  title="Instalar Aplicativo no Celular"
-                  className={`p-3 bg-green-600/80 rounded-full hover:bg-green-500 text-white self-end md:self-auto shadow-lg shadow-green-500/30 border border-green-500/50 ${installPrompt ? 'animate-bounce' : ''}`}
+                  title="Instalar Aplicativo"
+                  className="p-3 bg-green-600/80 rounded-full hover:bg-green-500 text-white self-end md:self-auto animate-bounce shadow-lg shadow-green-500/30 border border-green-500/50"
                 >
                   <Download className="w-5 h-5" />
+                </button>
+              )}
+              {!installPrompt && !isPwaInstalled && (
+                <button 
+                  onClick={() => {
+                    setShowInstallHelp(true);
+                    playSound.click();
+                  }}
+                  title="Como instalar o aplicativo?"
+                  className="p-3 bg-slate-700 rounded-full hover:bg-slate-600 text-white self-end md:self-auto"
+                >
+                  <Info className="w-5 h-5" />
                 </button>
               )}
               <button onClick={handleDashboardLogout} title="Desconectar" className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
@@ -3391,6 +3398,54 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
            </div>
          )}
          
+         {/* PWA Install Help Modal */}
+         {showInstallHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(8,145,178,0.2)] relative">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                  <Download className="w-6 h-6 text-cyan-400"/>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-1">Como Instalar o Aplicativo</h2>
+                  <p className="text-slate-400 text-sm">O navegador não ofereceu a instalação automática. Siga os passos manuais:</p>
+                </div>
+              </div>
+              
+              <div className="my-6 space-y-4 text-slate-300 text-sm">
+                <div className="bg-slate-800/50 p-4 rounded-lg">
+                  <p className="font-bold text-cyan-400 mb-1">No Celular (Chrome ou Safari):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Toque no menu do navegador (normalmente <span className="font-bold">⋮</span> ou um ícone de <span className="font-bold">Compartilhar</span>).</li>
+                    <li>Procure e selecione a opção <span className="font-bold">"Instalar aplicativo"</span> ou <span className="font-bold">"Adicionar à Tela de Início"</span>.</li>
+                    <li>Confirme a instalação.</li>
+                  </ol>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg">
+                  <p className="font-bold text-cyan-400 mb-1">No Computador (Chrome ou Edge):</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Clique no ícone de menu (<span className="font-bold">⋮</span>) no canto superior direito.</li>
+                    <li>Vá em <span className="font-bold">"Instalar [NexusWork Portal]"</span> ou procure por um ícone de instalação na barra de endereço.</li>
+                    <li>Confirme a instalação.</li>
+                  </ol>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button 
+                  onClick={() => {
+                    setShowInstallHelp(false);
+                    playSound.click();
+                  }}
+                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
          {/* Toast Notification */}
          <div className={`fixed top-4 right-4 z-50 transition-all duration-500 transform ${toast.visible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}>
            <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl border backdrop-blur-md ${
