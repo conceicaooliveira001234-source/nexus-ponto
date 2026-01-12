@@ -9,7 +9,7 @@ import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
 import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
 import { db } from '../lib/firebase';
-import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore';
 import * as faceapi from 'face-api.js';
 import { getCurrentPosition, isWithinRadius, calculateDistance } from '../lib/geolocation';
 import { playSound } from '../lib/sounds';
@@ -1036,13 +1036,31 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm("Tem certeza que deseja DELETAR este funcionário? Essa ação não pode ser desfeita.")) {
+    if (window.confirm("Tem certeza que deseja DELETAR este funcionário e TODOS os seus registros de ponto? Essa ação não pode ser desfeita.")) {
       try {
+        // 1. Find all attendance records for this employee
+        const attendanceRef = collection(db, "attendance");
+        const q = query(attendanceRef, where("employeeId", "==", id));
+        const snapshot = await getDocs(q);
+
+        // 2. Delete all found attendance records in a batch
+        if (!snapshot.empty) {
+          const batch = writeBatch(db);
+          snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${id}.`);
+        }
+
+        // 3. Delete the employee document itself
         await deleteDoc(doc(db, "employees", id));
+        
+        showToast("Funcionário e todos os seus dados foram removidos.", "success");
         playSound.click(); // 🔊 SOM DE CLIQUE
       } catch (error) {
-        console.error("Error deleting employee:", error);
-        showToast("Erro ao remover funcionário.", "error");
+        console.error("Error deleting employee and their records:", error);
+        showToast("Erro ao remover funcionário e seus dados.", "error");
         playSound.error(); // 🔊 SOM DE ERRO
       }
     }
