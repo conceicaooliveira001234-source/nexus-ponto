@@ -66,35 +66,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ═══════════════════════════════════════════════════════════════
-    // MODO DESENVOLVIMENTO (PERMISSIVO)
-    // Mantemos a separação das coleções, mas liberamos o acesso
-    // para você testar o painel e o reconhecimento facial sem travas.
-    // ═══════════════════════════════════════════════════════════════
-
-    // COMPANIES
+    // Collection: companies
     match /companies/{companyId} {
-      allow read, write: if true;
+      // Permitir leitura e escrita autenticada
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
-    // EMPLOYEES (Essencial para o Reconhecimento Facial)
-    match /employees/{employeeId} {
-      allow read, write: if true;
-    }
-    
-    // LOCATIONS
+    // Collection: locations
     match /locations/{locationId} {
-      allow read, write: if true;
+      // Permitir leitura para todos (necessário para login de funcionários)
+      allow read: if true;
+      // Permitir escrita apenas para usuários autenticados (donos da empresa)
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
-    // USERS (Para o Login de Admin/Senha)
-    match /users/{userId} {
-      allow read, write: if true;
+    // Collection: employees
+    match /employees/{employeeId} {
+      // Permitir leitura para todos (necessário para reconhecimento facial)
+      allow read: if true;
+      // Permitir escrita apenas para usuários autenticados (donos da empresa)
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
-    // ATTENDANCE (Para bater o ponto)
+    // Collection: attendance (CRÍTICO!)
     match /attendance/{attendanceId} {
-      allow read, write: if true;
+      // Permitir leitura para todos os registros
+      allow read: if true;
+      
+      // Permitir criação de novos registros se forem válidos (ESSENCIAL!)
+      allow create: if request.resource.data.verified == true
+                    && request.resource.data.employeeId is string
+                    && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
+      
+      // Permitir atualização e exclusão apenas para autenticados
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null || (resource.data.isTest == true);
+    }
+    
+    // Collection: users
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

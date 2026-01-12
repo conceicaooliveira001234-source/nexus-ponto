@@ -62,11 +62,16 @@ service cloud.firestore {
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ... outras coleções ...
+
     match /attendance/{attendanceId} {
-      allow read: if true;   // ✅ LIBERADO
-      allow create: if true; // ✅ LIBERADO
-      ...
+      allow read: if true; // Leitura pública para histórico
+      
+      // Apenas permite criar registros se forem verificados
+      allow create: if request.resource.data.verified == true;
     }
+
+    // ...
   }
 }
 ```

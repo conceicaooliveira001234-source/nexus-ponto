@@ -26,34 +26,74 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ═══════════════════════════════════════════════════════════════
-    // MODO DESENVOLVIMENTO (PERMISSIVO)
-    // Mantemos a separação das coleções, mas liberamos o acesso
-    // para você testar o painel e o reconhecimento facial sem travas.
+    // COMPANIES - Apenas o dono da empresa pode ler/escrever
     // ═══════════════════════════════════════════════════════════════
-
-    // COMPANIES
     match /companies/{companyId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
-    // EMPLOYEES (Essencial para o Reconhecimento Facial)
+    // ═══════════════════════════════════════════════════════════════
+    // EMPLOYEES - Leitura pública para reconhecimento facial
+    // ═══════════════════════════════════════════════════════════════
     match /employees/{employeeId} {
-      allow read, write: if true;
+      // Leitura pública é necessária para que o sistema possa comparar
+      // o rosto do usuário com os funcionários cadastrados.
+      allow read: if true;
+      // Escrita permitida apenas para o admin da empresa dona do funcionário.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.companyId == request.auth.uid;
+			allow update: if
+        // Admin pode atualizar
+        (request.auth != null && resource.data.companyId == request.auth.uid) ||
+        // Funcionário pode cadastrar o rosto uma vez via link
+        (
+          request.auth == null &&
+          (resource.data.photoBase64 == null || resource.data.photoBase64 == "") &&
+          request.resource.data.photoBase64 is string && request.resource.data.photoBase64 != "" &&
+          // Garante que APENAS o campo 'photoBase64' está sendo alterado.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoBase64'])
+        );
     }
     
-    // LOCATIONS
+    // ═══════════════════════════════════════════════════════════════
+    // LOCATIONS - Leitura pública para seleção de local pelo funcionário
+    // ═══════════════════════════════════════════════════════════════
     match /locations/{locationId} {
-      allow read, write: if true;
+      // Leitura pública é necessária para que o funcionário possa
+      // ver e selecionar seu local de trabalho no painel.
+      allow read: if true;
+      // Escrita permitida apenas para o admin da empresa dona do local.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
-    // USERS (Para o Login de Admin/Senha)
+    // ═══════════════════════════════════════════════════════════════
+    // USERS - Apenas o próprio usuário pode ler/escrever seus dados
+    // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // ATTENDANCE (Para bater o ponto)
+    // ═══════════════════════════════════════════════════════════════
+    // ATTENDANCE - ACESSO PÚBLICO PARA CRIAR REGISTROS
+    // ═══════════════════════════════════════════════════════════════
+    // Funcionários usam reconhecimento facial (não Firebase Auth)
+    // Por isso, precisam de permissão pública para criar registros
+    // ═══════════════════════════════════════════════════════════════
     match /attendance/{attendanceId} {
-      allow read, write: if true;
+      // LEITURA: Qualquer pessoa pode ler (para o histórico)
+      allow read: if true;
+
+      // CRIAÇÃO: Apenas registros válidos do app de ponto
+      allow create: if request.resource.data.verified == true
+                    && request.resource.data.employeeId is string
+                    && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
+
+      // ATUALIZAÇÃO: Apenas usuários autenticados (admins)
+      allow update: if request.auth != null;
+
+      // EXCLUSÃO: Apenas admins, ou para limpar documentos de teste
+      allow delete: if request.auth != null || (resource.data.isTest == true);
     }
   }
 }

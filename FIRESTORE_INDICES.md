@@ -176,14 +176,19 @@ Certifique-se de que as regras estão corretas:
 
 ```javascript
 match /attendance/{attendanceId} {
-  // Permitir leitura para todos
+  // LEITURA: Qualquer pessoa pode ler (para o histórico)
   allow read: if true;
-  
-  // Permitir criação de novos registros
-  allow create: if true;
-  
-  // Permitir atualização e exclusão apenas para empresas autenticadas
-  allow update, delete: if request.auth != null;
+
+  // CRIAÇÃO: Apenas registros válidos do app de ponto
+  allow create: if request.resource.data.verified == true
+                && request.resource.data.employeeId is string
+                && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
+
+  // ATUALIZAÇÃO: Apenas usuários autenticados (admins)
+  allow update: if request.auth != null;
+
+  // EXCLUSÃO: Apenas admins, ou para limpar documentos de teste
+  allow delete: if request.auth != null || (resource.data.isTest == true);
 }
 ```
 
