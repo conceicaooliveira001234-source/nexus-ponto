@@ -141,6 +141,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }, 5000);
   }, []);
 
+  const todayAttendance = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // attendanceRecords is already sorted desc by timestamp
+    return attendanceRecords.filter(record => record.timestamp >= todayStart);
+  }, [attendanceRecords]);
+
   // -- Notification Logic --
   useEffect(() => {
     const NOTIFICATION_TAG = 'nexuswork-reminder';
@@ -199,7 +207,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             await registration.showNotification('Lembrete de Ponto', {
               tag: NOTIFICATION_TAG, // Tag para identificar e gerenciar a notificação
               body: `Faltam 3 minutos para o seu horário de ${nextEvent.label}.`,
-              showTrigger: new TimestampTrigger(notificationTime.getTime()), // Agenda para o futuro
               icon: '/pwa-192x192.png',
               badge: '/pwa-192x192.png', // Ícone para a barra de status
               vibrate: [200, 100, 200],
@@ -979,14 +986,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }, [identifiedEmployee?.shifts]);
 
   // -- Logic for Sequential Attendance Buttons --
-  const todayAttendance = useMemo(() => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    // attendanceRecords is already sorted desc by timestamp
-    return attendanceRecords.filter(record => record.timestamp >= todayStart);
-  }, [attendanceRecords]);
-
   const nextAction = useMemo(() => {
     const lastRecord = todayAttendance[0]; // Newest record of the day
 
