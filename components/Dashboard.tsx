@@ -326,15 +326,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('🤖 Iniciando reconhecimento automático para LOGIN...');
       setScanMessage('🔍 Reconhecendo automaticamente...');
       
-      // Aguardar 1 segundo para câmera estabilizar
+      // Aguardar 0.5 segundo para câmera estabilizar (era 1s)
       const startDelay = setTimeout(() => {
         loginRecognitionInterval = setInterval(() => {
           if (!isScanning && !isBiometricVerified) {
             console.log('🔄 Tentando identificar funcionário automaticamente...');
             identifyEmployee();
           }
-        }, 2500); // A cada 2.5 segundos
-      }, 1000);
+        }, 1000); // A cada 1 segundo (era 2.5s)
+      }, 500);
 
       return () => {
         clearTimeout(startDelay);
@@ -354,14 +354,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee) {
       console.log('🤖 Iniciando validação contínua para registro de ponto...');
       
-      // Aguardar 1 segundo para câmera estabilizar
+      // Aguardar 0.5 segundo para câmera estabilizar (era 1s)
       const startDelay = setTimeout(() => {
         attendanceValidationInterval = setInterval(() => {
           if (!isRegisteringAttendance && !isScanning) {
             autoRecognizeAndRegister();
           }
-        }, 2500); // A cada 2.5 segundos
-      }, 1000);
+        }, 1000); // A cada 1 segundo (era 2.5s)
+      }, 500);
 
       return () => {
         clearTimeout(startDelay);
