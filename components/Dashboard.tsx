@@ -2262,7 +2262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                        />
                                      </div>
                                      
-                                     <div className="grid grid-cols-2 gap-2">
+                                     <div className="grid grid-cols-4 gap-2">
                                        <TechInput 
                                          label="Entrada" 
                                          type="time" 
@@ -2270,24 +2270,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                          onChange={e => handleShiftChange(index, 'entryTime', e.target.value)} 
                                        />
                                        <TechInput 
-                                         label="Saída" 
-                                         type="time" 
-                                         value={shift.exitTime} 
-                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
-                                       />
-                                     </div>
-                                     <div className="grid grid-cols-2 gap-2 mt-2">
-                                       <TechInput 
-                                         label="Início Intervalo" 
+                                         label="Início Pausa" 
                                          type="time" 
                                          value={shift.breakTime || ''} 
                                          onChange={e => handleShiftChange(index, 'breakTime', e.target.value)} 
                                        />
                                        <TechInput 
-                                         label="Fim Intervalo" 
+                                         label="Fim Pausa" 
                                          type="time" 
                                          value={shift.breakEndTime || ''} 
                                          onChange={e => handleShiftChange(index, 'breakEndTime', e.target.value)} 
+                                       />
+                                       <TechInput 
+                                         label="Saída" 
+                                         type="time" 
+                                         value={shift.exitTime} 
+                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
                                        />
                                      </div>
                                    </div>
