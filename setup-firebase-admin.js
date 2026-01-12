@@ -53,7 +53,20 @@ service cloud.firestore {
       allow read: if true;
       // Escrita permitida apenas para o admin da empresa dona do funcionário.
       allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.companyId == request.auth.uid;
+			allow update: if
+        // Admin pode atualizar
+        (request.auth != null && resource.data.companyId == request.auth.uid) ||
+        // Funcionário pode cadastrar o rosto uma vez via link
+        (
+          request.auth == null &&
+          (resource.data.photoBase64 == null || resource.data.photoBase64 == "") &&
+          request.resource.data.photoBase64 is string && request.resource.data.photoBase64 != "" &&
+          // Garante que APENAS o campo 'photoBase64' está sendo alterado.
+          // Isso é mais seguro e correto do que comparar cada campo individualmente,
+          // especialmente para listas (arrays) como 'shifts' e 'locationIds'.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoBase64'])
+        );
     }
     
     // ═══════════════════════════════════════════════════════════════
