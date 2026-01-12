@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
-import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord } from '../types';
+import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
 import { db } from '../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import * as faceapi from 'face-api.js';
@@ -58,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const initialEmployeeState = {
     name: '', cpf: '', role: '', whatsapp: '', 
-    shift: '', entryTime: '', breakTime: '', exitTime: '', 
+    shifts: [] as Shift[], 
     locationIds: [] as string[], 
     photoBase64: '', pin: ''
   };
@@ -243,10 +243,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         const data = doc.data();
         // Handle legacy locationId by converting to array
         const locIds = data.locationIds || (data.locationId ? [data.locationId] : []);
+        // Handle legacy shift fields by converting to shifts array if needed
+        let shifts = data.shifts || [];
+        if (shifts.length === 0 && data.entryTime && data.exitTime) {
+           shifts.push({
+             id: 'legacy',
+             name: 'Turno Padrão',
+             entryTime: data.entryTime,
+             breakTime: data.breakTime,
+             exitTime: data.exitTime
+           });
+        }
         return {
           id: doc.id,
           ...data,
-          locationIds: locIds
+          locationIds: locIds,
+          shifts: shifts
         } as Employee;
       });
       setEmployees(emps);
@@ -660,10 +672,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
     
     try {
-      const shiftDescription = `${newEmployee.entryTime} - ${newEmployee.exitTime}`;
+      // Create a summary of shifts for display
+      const shiftDescription = newEmployee.shifts.length > 0 
+        ? newEmployee.shifts.map(s => `${s.name}: ${s.entryTime}-${s.exitTime}`).join(', ')
+        : 'Sem turno definido';
+
       const employeeData = {
         ...newEmployee,
-        shift: shiftDescription,
+        shift: shiftDescription, // Legacy field for backward compatibility
         companyId: currentCompanyId
       };
 
@@ -697,10 +713,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       cpf: emp.cpf,
       role: emp.role,
       whatsapp: emp.whatsapp,
-      shift: emp.shift,
-      entryTime: emp.entryTime,
-      breakTime: emp.breakTime,
-      exitTime: emp.exitTime,
+      shifts: emp.shifts || [],
       locationIds: emp.locationIds || [],
       photoBase64: emp.photoBase64 || '',
       pin: emp.pin || ''
@@ -726,6 +739,37 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         playSound.error(); // 🔊 SOM DE ERRO
       }
     }
+  };
+
+  const handleAddShift = () => {
+    setNewEmployee(prev => ({
+      ...prev,
+      shifts: [
+        ...prev.shifts,
+        {
+          id: Date.now().toString(),
+          name: '',
+          entryTime: '',
+          breakTime: '',
+          exitTime: ''
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveShift = (index: number) => {
+    setNewEmployee(prev => ({
+      ...prev,
+      shifts: prev.shifts.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleShiftChange = (index: number, field: keyof Shift, value: string) => {
+    setNewEmployee(prev => {
+      const updatedShifts = [...prev.shifts];
+      updatedShifts[index] = { ...updatedShifts[index], [field]: value };
+      return { ...prev, shifts: updatedShifts };
+    });
   };
 
   const maskCPF = (value: string) => {
@@ -1942,28 +1986,66 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                            </div>
 
                            <div className="space-y-2">
-                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Horários do Turno</label>
-                             <div className="grid grid-cols-3 gap-3">
-                               <TechInput 
-                                 label="Entrada" 
-                                 type="time" 
-                                 value={newEmployee.entryTime} 
-                                 onChange={e => setNewEmployee({...newEmployee, entryTime: e.target.value})} 
-                                 required 
-                               />
-                               <TechInput 
-                                 label="Intervalo" 
-                                 type="time" 
-                                 value={newEmployee.breakTime} 
-                                 onChange={e => setNewEmployee({...newEmployee, breakTime: e.target.value})} 
-                               />
-                               <TechInput 
-                                 label="Saída" 
-                                 type="time" 
-                                 value={newEmployee.exitTime} 
-                                 onChange={e => setNewEmployee({...newEmployee, exitTime: e.target.value})} 
-                                 required 
-                               />
+                             <div className="flex justify-between items-center">
+                               <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Turnos de Trabalho</label>
+                               <button 
+                                 type="button" 
+                                 onClick={handleAddShift}
+                                 className="text-xs flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors"
+                               >
+                                 <Plus className="w-3 h-3" /> Adicionar Turno
+                               </button>
+                             </div>
+                             
+                             <div className="space-y-3">
+                               {newEmployee.shifts.length === 0 ? (
+                                 <div className="text-center p-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-xs">
+                                   Nenhum turno adicionado. Clique em "Adicionar Turno".
+                                 </div>
+                               ) : (
+                                 newEmployee.shifts.map((shift, index) => (
+                                   <div key={shift.id} className="bg-slate-950/50 border border-slate-700 rounded-lg p-3 relative group">
+                                     <button 
+                                       type="button"
+                                       onClick={() => handleRemoveShift(index)}
+                                       className="absolute top-2 right-2 text-slate-600 hover:text-red-400 transition-colors"
+                                     >
+                                       <X className="w-3 h-3" />
+                                     </button>
+                                     
+                                     <div className="grid grid-cols-1 gap-2 mb-2">
+                                       <TechInput 
+                                         label="Nome do Turno" 
+                                         placeholder="Ex: Manhã, Tarde, 12x36"
+                                         value={shift.name} 
+                                         onChange={e => handleShiftChange(index, 'name', e.target.value)} 
+                                         className="mb-1"
+                                       />
+                                     </div>
+                                     
+                                     <div className="grid grid-cols-3 gap-2">
+                                       <TechInput 
+                                         label="Entrada" 
+                                         type="time" 
+                                         value={shift.entryTime} 
+                                         onChange={e => handleShiftChange(index, 'entryTime', e.target.value)} 
+                                       />
+                                       <TechInput 
+                                         label="Intervalo" 
+                                         type="time" 
+                                         value={shift.breakTime || ''} 
+                                         onChange={e => handleShiftChange(index, 'breakTime', e.target.value)} 
+                                       />
+                                       <TechInput 
+                                         label="Saída" 
+                                         type="time" 
+                                         value={shift.exitTime} 
+                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
+                                       />
+                                     </div>
+                                   </div>
+                                 ))
+                               )}
                              </div>
                            </div>
                          </div>
@@ -2063,7 +2145,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                         <div className="text-white font-bold text-lg leading-tight truncate uppercase font-tech tracking-wide">{emp.name}</div>
                                         <div className="text-cyan-500 text-xs font-bold uppercase tracking-wider mb-2">{emp.role || 'SEM CARGO'}</div>
                                         <span className="inline-block bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-400 font-mono uppercase">
-                                          {emp.shift}
+                                          {emp.shifts && emp.shifts.length > 0 ? `${emp.shifts.length} Turno(s)` : 'Sem Turno'}
                                         </span>
                                       </div>
                                   </div>

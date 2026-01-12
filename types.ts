@@ -28,6 +28,14 @@ export interface ServiceLocation {
   radius: number; // Geofence radius in meters
 }
 
+export interface Shift {
+  id: string;
+  name: string; // Ex: "Manhã", "Tarde", "Segunda-Sexta"
+  entryTime: string;
+  breakTime?: string;
+  exitTime: string;
+}
+
 export interface Employee {
   id: string;
   companyId: string; // Tenant ID
@@ -35,13 +43,15 @@ export interface Employee {
   cpf: string;
   role: string;
   whatsapp: string;
-  shift: string;
-  entryTime: string;
-  breakTime: string;
-  exitTime: string;
+  shifts: Shift[]; // Array de turnos
   locationIds: string[]; // Changed to array for multiple locations
   photoBase64?: string; // Reference photo for facial recognition
   pin?: string;
+  // Legacy fields (kept for compatibility, but should migrate to shifts array)
+  shift?: string;
+  entryTime?: string;
+  breakTime?: string;
+  exitTime?: string;
 }
 
 export interface EmployeeContext {
