@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -735,7 +735,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     try {
       // Create a summary of shifts for display
       const shiftDescription = newEmployee.shifts.length > 0 
-        ? newEmployee.shifts.map(s => `${s.name}: ${s.entryTime}-${s.exitTime}`).join(', ')
+        ? newEmployee.shifts.map(s => `${s.name}: ${s.entryTime}-${s.exitTime} (Pausa: ${s.breakTime || 'N/A'}-${s.breakEndTime || 'N/A'})`).join(', ')
         : 'Sem turno definido';
 
       const employeeData = {
@@ -812,6 +812,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           name: '',
           entryTime: '',
           breakTime: '',
+          breakEndTime: '',
           exitTime: ''
         }
       ]
@@ -1216,8 +1217,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       const [h, m] = shift.exitTime.split(':').map(Number);
       targetTime = h * 60 + m;
       isEntry = false;
-    } else {
-      // Break times logic could be added here
+    } else if (type === 'BREAK_START' && shift.breakTime) {
+      const [h, m] = shift.breakTime.split(':').map(Number);
+      targetTime = h * 60 + m;
+      isEntry = true; // Logic is same as entry (lateness)
+    } else if (type === 'BREAK_END' && shift.breakEndTime) {
+      const [h, m] = shift.breakEndTime.split(':').map(Number);
+      targetTime = h * 60 + m;
+      isEntry = true; // Logic is same as entry (lateness for return)
+    }
+    else {
+      // No specific time for this type
       return { score, status, message, color };
     }
 
@@ -1486,7 +1496,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         verified: true,
         distance: distanceToLocation,
         score: score,
-        punctualityStatus: status
+        punctualityStatus: status,
+        punctualityMessage: scoreMessage
       };
 
       console.log('📋 Estrutura do documento a ser salvo:');
@@ -1504,6 +1515,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('   - distance:', attendanceData.distance);
       console.log('   - score:', attendanceData.score);
       console.log('   - punctualityStatus:', attendanceData.punctualityStatus);
+      console.log('   - punctualityMessage:', attendanceData.punctualityMessage);
 
       // ETAPA 6: SALVAMENTO NO FIRESTORE
       console.log('───────────────────────────────────────────────────────');
@@ -2186,7 +2198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                        />
                                      </div>
                                      
-                                     <div className="grid grid-cols-3 gap-2">
+                                     <div className="grid grid-cols-2 gap-2">
                                        <TechInput 
                                          label="Entrada" 
                                          type="time" 
@@ -2194,16 +2206,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                          onChange={e => handleShiftChange(index, 'entryTime', e.target.value)} 
                                        />
                                        <TechInput 
-                                         label="Intervalo" 
+                                         label="Saída" 
+                                         type="time" 
+                                         value={shift.exitTime} 
+                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
+                                       />
+                                     </div>
+                                     <div className="grid grid-cols-2 gap-2 mt-2">
+                                       <TechInput 
+                                         label="Início Intervalo" 
                                          type="time" 
                                          value={shift.breakTime || ''} 
                                          onChange={e => handleShiftChange(index, 'breakTime', e.target.value)} 
                                        />
                                        <TechInput 
-                                         label="Saída" 
+                                         label="Fim Intervalo" 
                                          type="time" 
-                                         value={shift.exitTime} 
-                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
+                                         value={shift.breakEndTime || ''} 
+                                         onChange={e => handleShiftChange(index, 'breakEndTime', e.target.value)} 
                                        />
                                      </div>
                                    </div>
@@ -2524,31 +2544,31 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // Helper to check shift visibility
   const isShiftVisible = (shift: Shift) => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
     if (!shift.entryTime || !shift.exitTime) {
       console.warn(`Turno ignorado por falta de horários definidos: ${shift.name || 'Sem nome'} (ID: ${shift.id})`);
       return false;
     }
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    
+
     const [entryH, entryM] = shift.entryTime.split(':').map(Number);
     const [exitH, exitM] = shift.exitTime.split(':').map(Number);
     
-    let entryMinutes = entryH * 60 + entryM;
-    let exitMinutes = exitH * 60 + exitM;
+    const entryMinutes = entryH * 60 + entryM;
+    const exitMinutes = exitH * 60 + exitM;
     
-    // Janela de visibilidade: 6 horas antes da entrada até 6 horas depois da saída
-    const VISIBILITY_PADDING_MINUTES = 6 * 60; 
+    // Janela de visibilidade: 6 horas antes da entrada até a hora da saída
+    const VISIBILITY_PADDING_BEFORE_MINUTES = 6 * 60;
     
-    // Lógica de intervalo circular para lidar com meia-noite
-    const startWindow = (entryMinutes - VISIBILITY_PADDING_MINUTES + 1440) % 1440;
-    const endWindow = (exitMinutes + VISIBILITY_PADDING_MINUTES) % 1440;
-    
-    if (startWindow < endWindow) {
-        // Janela normal (ex: 04:00 as 21:00)
+    const startWindow = (entryMinutes - VISIBILITY_PADDING_BEFORE_MINUTES + 1440) % 1440;
+    const endWindow = exitMinutes;
+
+    if (startWindow <= endWindow) {
+        // Turno normal (ex: visível de 02:00 até 17:00)
         return currentMinutes >= startWindow && currentMinutes <= endWindow;
     } else {
-        // Janela cruza meia noite (ex: 18:00 as 10:00)
+        // Turno noturno (ex: visível de 16:00 até 06:00 do dia seguinte)
         return currentMinutes >= startWindow || currentMinutes <= endWindow;
     }
   };
@@ -2670,6 +2690,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                           EXIT: 'border-red-500 text-red-400'
                         };
                         
+                        const statusColors = {
+                          PERFECT: 'text-green-400',
+                          GOOD: 'text-yellow-400',
+                          LATE: 'text-red-400',
+                          NEUTRAL: 'text-slate-400',
+                        };
+                        const statusColor = statusColors[record.punctualityStatus as keyof typeof statusColors] || 'text-slate-400';
+
                         return (
                           <div key={record.id} className={`bg-slate-950/50 border-l-4 ${typeColors[record.type].split(' ')[0]} border-y border-r border-slate-800 p-4 rounded-r-lg flex justify-between items-center`}>
                             <div>
@@ -2679,6 +2707,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                               <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                                 <Clock className="w-3 h-3" /> {record.timestamp.toLocaleDateString('pt-BR')} - {record.timestamp.toLocaleTimeString('pt-BR')}
                               </div>
+                              {record.punctualityMessage && (
+                                <div className={`text-xs font-bold mt-2 ${statusColor}`}>
+                                  {record.punctualityMessage}
+                                </div>
+                              )}
                             </div>
                             <div className="text-right">
                                <div className="text-xs text-slate-400 font-mono">
@@ -2690,7 +2723,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                  </div>
                                )}
                                {record.score !== undefined && (
-                                 <div className={`text-[10px] font-bold flex items-center justify-end gap-1 mt-1 ${record.score >= 100 ? 'text-yellow-400' : record.score >= 50 ? 'text-cyan-400' : 'text-slate-500'}`}>
+                                 <div className={`text-[10px] font-bold flex items-center justify-end gap-1 mt-1 ${statusColor}`}>
                                    <Trophy className="w-3 h-3" /> {record.score} XP
                                  </div>
                                )}
@@ -2840,6 +2873,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                              BREAK_END: 'Fim Pausa',
                              EXIT: 'Saída'
                            };
+                           const statusColors = {
+                             PERFECT: 'text-green-400',
+                             GOOD: 'text-yellow-400',
+                             LATE: 'text-red-400',
+                             NEUTRAL: 'text-slate-400',
+                           };
+                           const statusColor = statusColors[record.punctualityStatus as keyof typeof statusColors] || 'text-slate-400';
+
                            return (
                              <div key={record.id} className={`flex justify-between text-sm p-3 bg-slate-950/50 rounded border-l-2 ${typeColors[record.type]}`}>
                                <div>
@@ -2850,8 +2891,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                </div>
                                <div className="text-right">
                                  <span className="font-mono text-white block">{record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                 {record.score !== undefined && (
-                                   <span className={`text-[10px] font-bold ${record.score >= 100 ? 'text-yellow-400' : 'text-cyan-500'}`}>+{record.score} XP</span>
+                                 {record.punctualityMessage && (
+                                   <span className={`text-[10px] font-bold ${statusColor}`}>{record.punctualityMessage}</span>
                                  )}
                                </div>
                              </div>

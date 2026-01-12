@@ -33,6 +33,7 @@ export interface Shift {
   name: string; // Ex: "Manhã", "Tarde", "Segunda-Sexta"
   entryTime: string;
   breakTime?: string;
+  breakEndTime?: string;
   exitTime: string;
 }
 
@@ -77,6 +78,9 @@ export interface AttendanceRecord {
   photoBase64?: string; // Foto do reconhecimento facial
   verified: boolean; // Se passou pelo reconhecimento facial
   distance?: number; // Distância do local em metros
+  score?: number;
+  punctualityStatus?: string;
+  punctualityMessage?: string;
 }
 
 export interface SelectionCardProps {
