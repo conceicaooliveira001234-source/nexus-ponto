@@ -69,23 +69,25 @@ service cloud.firestore {
     // Collection: companies
     match /companies/{companyId} {
       // Permitir leitura e escrita autenticada
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
     // Collection: locations
     match /locations/{locationId} {
       // Permitir leitura para todos (necessário para login de funcionários)
       allow read: if true;
-      // Permitir escrita apenas para usuários autenticados
-      allow write: if request.auth != null;
+      // Permitir escrita apenas para usuários autenticados (donos da empresa)
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // Collection: employees
     match /employees/{employeeId} {
       // Permitir leitura para todos (necessário para reconhecimento facial)
       allow read: if true;
-      // Permitir escrita apenas para usuários autenticados (empresas)
-      allow write: if request.auth != null;
+      // Permitir escrita apenas para usuários autenticados (donos da empresa)
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // Collection: attendance (CRÍTICO!)

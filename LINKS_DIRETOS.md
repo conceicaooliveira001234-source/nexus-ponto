@@ -25,21 +25,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // COMPANIES - Apenas usuários autenticados
+    // COMPANIES - Apenas o dono da empresa
     match /companies/{companyId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
     // EMPLOYEES - Leitura pública para reconhecimento facial
     match /employees/{employeeId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Apenas o admin da empresa pode escrever
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // LOCATIONS - Leitura pública para seleção de local
     match /locations/{locationId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Apenas o admin da empresa pode escrever
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // USERS - Apenas o próprio usuário pode ler/escrever seus dados

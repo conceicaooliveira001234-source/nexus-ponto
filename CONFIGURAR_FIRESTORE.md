@@ -40,19 +40,23 @@ service cloud.firestore {
     
     // Collection: companies
     match /companies/{companyId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
     // Collection: locations
     match /locations/{locationId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Escrita permitida apenas para o admin da empresa dona do local.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // Collection: employees
     match /employees/{employeeId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Escrita permitida apenas para o admin da empresa dona do funcionário.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // Collection: attendance (CRÍTICO!)
@@ -172,9 +176,9 @@ match /attendance/{attendanceId} {
 
 ```
 firestore/
-├── companies/          (read/write: autenticados)
-├── locations/          (read: todos | write: autenticados)
-├── employees/          (read: todos | write: autenticados)
+├── companies/          (read/write: dono da empresa)
+├── locations/          (read: todos | write: dono da empresa)
+├── employees/          (read: todos | write: dono da empresa)
 ├── attendance/         (read: todos | create: todos | update/delete: autenticados)
 └── users/              (read/write: próprio usuário)
 ```

@@ -38,10 +38,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ═══════════════════════════════════════════════════════════════
-    // COMPANIES - Apenas usuários autenticados podem ler/escrever
+    // COMPANIES - Apenas o dono da empresa pode ler/escrever
     // ═══════════════════════════════════════════════════════════════
     match /companies/{companyId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == companyId;
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -51,7 +51,9 @@ service cloud.firestore {
       // Leitura pública é necessária para que o sistema possa comparar
       // o rosto do usuário com os funcionários cadastrados.
       allow read: if true;
-      allow write: if request.auth != null;
+      // Escrita permitida apenas para o admin da empresa dona do funcionário.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -61,7 +63,9 @@ service cloud.firestore {
       // Leitura pública é necessária para que o funcionário possa
       // ver e selecionar seu local de trabalho no painel.
       allow read: if true;
-      allow write: if request.auth != null;
+      // Escrita permitida apenas para o admin da empresa dona do local.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
     }
     
     // ═══════════════════════════════════════════════════════════════
