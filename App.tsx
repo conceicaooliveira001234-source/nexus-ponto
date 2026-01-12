@@ -181,6 +181,19 @@ const App: React.FC = () => {
     setView('DASHBOARD_EMPLOYEE');
   };
 
+  const handleSetEmployeeLocation = (location: ServiceLocation | null) => {
+    if (employeeContext) {
+      const newContext = location
+        ? { ...employeeContext, locationId: location.id, locationName: location.name }
+        : { ...employeeContext, locationId: undefined, locationName: undefined };
+      
+      if (!newContext.companyId) return;
+
+      setEmployeeContext(newContext);
+      localStorage.setItem('nexus_employee_context', JSON.stringify(newContext));
+    }
+  };
+
   const handlePwaInstall = () => {
     if (!installPrompt) return;
     const promptEvent = installPrompt as any;
@@ -284,6 +297,7 @@ const App: React.FC = () => {
             employeeContext={employeeContext}
             isPwaInstalled={isPwaInstalled}
             installPrompt={installPrompt}
+            onSetLocation={handleSetEmployeeLocation}
           />
         );
         

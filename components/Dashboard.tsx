@@ -27,13 +27,14 @@ interface DashboardProps {
   employeeContext?: EmployeeContext | null;
   isPwaInstalled?: boolean;
   installPrompt?: Event | null;
+  onSetLocation?: (location: ServiceLocation | null) => void;
 }
 
 type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
-const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, isPwaInstalled, installPrompt }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, isPwaInstalled, installPrompt, onSetLocation }) => {
   const isCompany = role === UserRole.COMPANY;
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
   
@@ -141,23 +142,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }, 5000);
   }, []);
 
-  // -- Auto-select last used location --
+  // -- Restore selected location from context --
   useEffect(() => {
-    if (role === UserRole.EMPLOYEE && locations.length > 0 && !currentLocation && identifiedEmployee) {
-      const savedLocationId = localStorage.getItem('nexus_selected_location_id');
-      if (savedLocationId) {
-        // Check if employee has access to this location
-        const hasAccess = identifiedEmployee.locationIds?.includes(savedLocationId);
+    // This effect runs when locations are loaded or employee context changes.
+    if (role === UserRole.EMPLOYEE && locations.length > 0 && !currentLocation && employeeContext?.locationId) {
+      const savedLocation = locations.find(loc => loc.id === employeeContext.locationId);
+      
+      if (savedLocation) {
+        // Ensure the logged-in employee has access to this location before setting it.
+        const hasAccess = identifiedEmployee?.locationIds?.includes(savedLocation.id);
         if (hasAccess) {
-          const savedLocation = locations.find(loc => loc.id === savedLocationId);
-          if (savedLocation) {
-            console.log(`📍 Restaurando local de trabalho salvo: ${savedLocation.name}`);
-            setCurrentLocation(savedLocation);
-          }
+          console.log(`📍 Restaurando local de trabalho do contexto: ${savedLocation.name}`);
+          setCurrentLocation(savedLocation);
+        } else {
+          console.warn('⚠️ Local de trabalho salvo no contexto, mas funcionário não tem mais acesso.');
+          // Optionally clear the outdated context location
+          onSetLocation?.(null);
         }
       }
     }
-  }, [role, locations, currentLocation, identifiedEmployee]);
+  }, [role, locations, employeeContext, identifiedEmployee, currentLocation, onSetLocation]);
 
   const todayAttendance = useMemo(() => {
     const todayStart = new Date();
@@ -633,22 +637,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- Load Current Location and Attendance Records (Employee View) --
   useEffect(() => {
     if (!employeeContext) return;
-
-    // If locationId is present in context (legacy or persisted), load it
-    if (employeeContext.locationId) {
-        const loadLocation = async () => {
-        try {
-            const locationDoc = await getDoc(doc(db, "locations", employeeContext.locationId!));
-            if (locationDoc.exists()) {
-            setCurrentLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
-            console.log('📍 Local de trabalho carregado:', locationDoc.data());
-            }
-        } catch (error) {
-            console.error('❌ Erro ao carregar local:', error);
-        }
-        };
-        loadLocation();
-    }
 
     // Listen for attendance records
     if (identifiedEmployee) {
@@ -3257,10 +3245,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         value={currentLocation?.id || ''} 
                         onChange={(e) => {
                           const loc = locations.find(l => l.id === e.target.value);
+                          setCurrentLocation(loc || null);
+                          onSetLocation?.(loc || null);
                           if (loc) {
-                            setCurrentLocation(loc);
-                            localStorage.setItem('nexus_selected_location_id', loc.id);
                             showToast(`Local selecionado: ${loc.name}`, 'success');
+                          } else {
+                            // Clear shift if location is unselected
+                            setCurrentShift(null);
                           }
                         }}
                         className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors appearance-none"
