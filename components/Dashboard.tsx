@@ -116,13 +116,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     visible: false
   });
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
     // Auto hide after 5 seconds
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
-  };
+  }, []);
 
   // -- Persistência de Login do Funcionário --
   useEffect(() => {
@@ -276,18 +276,38 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // Sync identified employee data when the main employee list is updated from Firestore
   useEffect(() => {
-    if (identifiedEmployee?.id && employees.length > 0) {
-      const updatedData = employees.find(e => e.id === identifiedEmployee.id);
+    // This effect should only run when the global employee list is updated.
+    if (employees.length === 0) return;
+
+    setIdentifiedEmployee(currentEmployee => {
+      // If no employee is logged in, do nothing.
+      if (!currentEmployee?.id) {
+        return currentEmployee;
+      }
+
+      // Find the latest data for the logged-in employee from the updated list.
+      const updatedData = employees.find(e => e.id === currentEmployee.id);
       
-      // Check if data is found and if shifts are actually different to avoid unnecessary re-renders.
-      if (updatedData && JSON.stringify(updatedData.shifts) !== JSON.stringify(identifiedEmployee.shifts)) {
-        console.log(`🔄 Sincronizando dados para ${identifiedEmployee.name}. Os turnos foram alterados.`);
-        setIdentifiedEmployee(updatedData);
+      // If the employee was deleted from the list, don't change state.
+      if (!updatedData) {
+        return currentEmployee;
+      }
+
+      // Compare shifts to see if an update is needed. Stringify is not perfect but good enough here.
+      const shiftsChanged = JSON.stringify(updatedData.shifts || []) !== JSON.stringify(currentEmployee.shifts || []);
+
+      if (shiftsChanged) {
+        console.log(`🔄 Sincronizando dados para ${currentEmployee.name}. Os turnos foram alterados.`);
         showToast('Seus turnos de trabalho foram atualizados!', 'info');
         playSound.alert();
+        // Return the new data to update the state.
+        return updatedData;
       }
-    }
-  }, [employees, identifiedEmployee]);
+
+      // If no changes, return the existing state to prevent a re-render.
+      return currentEmployee;
+    });
+  }, [employees, showToast]);
 
   // -- Camera Lifecycle Effect --
   useEffect(() => {
