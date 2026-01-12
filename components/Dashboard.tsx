@@ -2160,72 +2160,72 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
 
   return (
-    <div className="relative min-h-screen p-6 flex flex-col items-center">
+    <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center">
       <TechBackground />
       <div className="relative z-30 w-full max-w-4xl">
          {/* Header */}
-         <div className="flex justify-between items-center mb-10 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur">
-            <div className="flex items-center gap-4">
-               <div className="w-16 h-16 rounded-full border-2 border-fuchsia-500 overflow-hidden shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+         <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur gap-4">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+               <div className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-fuchsia-500 overflow-hidden shadow-[0_0_20px_rgba(217,70,239,0.3)] shrink-0">
                  <img src={identifiedEmployee?.photoBase64} alt="Profile" className="w-full h-full object-cover" />
                </div>
-               <div>
-                 <h1 className="text-2xl font-bold text-white uppercase">{identifiedEmployee?.name}</h1>
-                 <div className="flex gap-3 text-xs font-mono text-slate-400">
+               <div className="min-w-0 flex-1">
+                 <h1 className="text-xl md:text-2xl font-bold text-white uppercase truncate">{identifiedEmployee?.name}</h1>
+                 <div className="flex flex-wrap gap-2 md:gap-3 text-xs font-mono text-slate-400">
                    <span className="flex items-center gap-1 text-fuchsia-400"><Activity className="w-3 h-3"/> ONLINE</span>
-                   <span>{identifiedEmployee?.role}</span>
-                   <span>{employeeContext?.companyName}</span>
+                   <span className="truncate">{identifiedEmployee?.role}</span>
+                   <span className="truncate">{employeeContext?.companyName}</span>
                  </div>
                </div>
             </div>
-            <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300"><ArrowLeft className="w-5 h-5" /></button>
+            <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
          </div>
 
          {/* Time Clock Action */}
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-8 flex flex-col items-center justify-center text-center shadow-2xl">
-               <div className="text-6xl font-tech font-bold text-white mb-2 tracking-widest">
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+            <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-2xl">
+               <div className="text-5xl md:text-6xl font-tech font-bold text-white mb-2 tracking-widest">
                  {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                </div>
-               <div className="text-slate-400 font-mono text-sm mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+               <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                
                {/* Attendance Type Buttons */}
                <div className="w-full max-w-md space-y-3 mb-6">
                  <button 
                    onClick={() => startAttendanceFlow('ENTRY')}
                    disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                   className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                  >
-                   <LogIn className="w-6 h-6" /> ENTRADA
+                   <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
                  </button>
 
                  <button 
                    onClick={() => startAttendanceFlow('BREAK_START')}
                    disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                   className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                  >
-                   <Coffee className="w-6 h-6" /> INÍCIO PAUSA
+                   <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
                  </button>
 
                  <button 
                    onClick={() => startAttendanceFlow('BREAK_END')}
                    disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                   className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                  >
-                   <Play className="w-6 h-6" /> FIM PAUSA
+                   <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
                  </button>
 
                  <button 
                    onClick={() => startAttendanceFlow('EXIT')}
                    disabled={isCheckingLocation || isRegisteringAttendance}
-                   className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                   className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                  >
-                   <LogOut className="w-6 h-6" /> SAÍDA
+                   <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
                  </button>
                </div>
                
-               <p className="mt-4 text-xs text-slate-500 flex items-center gap-2">
-                 <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400">{employeeContext?.locationName}</span>
+               <p className="mt-4 text-xs text-slate-500 flex items-center gap-2 justify-center">
+                 <MapPin className="w-3 h-3" /> Local: <span className="text-fuchsia-400 truncate max-w-[200px]">{employeeContext?.locationName}</span>
                </p>
             </div>
 
@@ -2269,17 +2269,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
          {/* Attendance Flow Modal */}
          {showAttendanceFlow && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-             <div className="bg-slate-900 border-2 border-fuchsia-500/50 rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-[0_0_50px_rgba(217,70,239,0.3)] relative">
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+             <div className="bg-slate-900 border-2 border-fuchsia-500/50 rounded-2xl p-4 md:p-8 max-w-2xl w-full shadow-[0_0_50px_rgba(217,70,239,0.3)] relative max-h-[90vh] overflow-y-auto">
                {/* Header */}
-               <div className="flex justify-between items-center mb-6">
+               <div className="flex justify-between items-center mb-4 md:mb-6">
                  <div>
-                   <h2 className="text-2xl font-bold text-white flex items-center gap-3 mb-1">
-                     <Clock className="w-8 h-8 text-fuchsia-400" />
+                   <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2 md:gap-3 mb-1">
+                     <Clock className="w-6 h-6 md:w-8 md:h-8 text-fuchsia-400" />
                      Registrar Ponto
                    </h2>
                    {attendanceType && (
-                     <p className="text-fuchsia-400 text-sm font-mono ml-11">
+                     <p className="text-fuchsia-400 text-sm font-mono ml-8 md:ml-11">
                        {attendanceType === 'ENTRY' && '🟢 Entrada'}
                        {attendanceType === 'BREAK_START' && '🟡 Início da Pausa'}
                        {attendanceType === 'BREAK_END' && '🔵 Fim da Pausa'}
@@ -2320,7 +2320,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                        autoPlay 
                        playsInline 
                        muted
-                       className="w-full h-[400px] object-cover rounded-xl border-2 border-fuchsia-500/50 transform scale-x-[-1]"
+                       className="w-full h-[300px] md:h-[400px] object-cover rounded-xl border-2 border-fuchsia-500/50 transform scale-x-[-1]"
                      />
                      <canvas ref={canvasRef} className="hidden" />
                      
