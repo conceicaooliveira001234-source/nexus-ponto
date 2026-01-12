@@ -2544,6 +2544,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // Helper to check shift visibility
   const isShiftVisible = (shift: Shift) => {
+    if (!shift) {
+      return false;
+    }
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
