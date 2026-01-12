@@ -59,7 +59,9 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if request.auth != null;
+      allow update: if request.auth != null;
+      // Permite deletar se for admin OU se for um documento de teste do script de setup
+      allow delete: if request.auth != null || (resource.data.isTest == true);
     }
     
     // Collection: users
@@ -158,7 +160,9 @@ match /attendance/{attendanceId} {
   allow create: if request.resource.data.verified == true
                 && request.resource.data.employeeId is string
                 && request.resource.data.type in ['ENTRY', 'BREAK_START', 'BREAK_END', 'EXIT'];
-  allow update, delete: if request.auth != null;
+  allow update: if request.auth != null;
+  // Permite deletar se for admin OU se for um documento de teste do script de setup
+  allow delete: if request.auth != null || (resource.data.isTest == true);
 }
 ```
 

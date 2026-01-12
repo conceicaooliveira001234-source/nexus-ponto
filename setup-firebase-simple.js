@@ -86,8 +86,11 @@ service cloud.firestore {
       // CRIAÇÃO: Qualquer pessoa pode criar (para registrar ponto)
       allow create: if true;
       
-      // ATUALIZAÇÃO E EXCLUSÃO: Apenas usuários autenticados (admins)
-      allow update, delete: if request.auth != null;
+      // ATUALIZAÇÃO: Apenas usuários autenticados (admins)
+      allow update: if request.auth != null;
+      
+      // EXCLUSÃO: Apenas admins, ou para limpar documentos de teste
+      allow delete: if request.auth != null || (resource.data.isTest == true);
     }
   }
 }`;

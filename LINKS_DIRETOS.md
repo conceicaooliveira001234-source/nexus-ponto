@@ -52,7 +52,9 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if request.auth != null;
+      allow update: if request.auth != null;
+      // Permite deletar se for admin ou se for um documento de teste
+      allow delete: if request.auth != null || (resource.data.isTest == true);
     }
   }
 }
