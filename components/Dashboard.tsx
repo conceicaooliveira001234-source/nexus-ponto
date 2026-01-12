@@ -102,7 +102,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   
   // -- Attendance History States --
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<EmployeeViewTab>('DASHBOARD');
-  const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyStartDate, setHistoryStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyEndDate, setHistoryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [historyRecords, setHistoryRecords] = useState<AttendanceRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedHistoryLocation, setSelectedHistoryLocation] = useState<string>('');
@@ -542,9 +543,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         setIsLoadingHistory(true);
         try {
           // Create date range for the selected date (local time)
-          const [year, month, day] = historyDate.split('-').map(Number);
-          const start = new Date(year, month - 1, day, 0, 0, 0, 0);
-          const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+          const [startYear, startMonth, startDay] = historyStartDate.split('-').map(Number);
+          const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+
+          const [endYear, endMonth, endDay] = historyEndDate.split('-').map(Number);
+          const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
           const q = query(
             collection(db, "attendance"),
@@ -588,7 +591,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
       fetchHistory();
     }
-  }, [activeEmployeeTab, historyDate, identifiedEmployee]);
+  }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
 
   // -- Handlers --
 
@@ -2448,14 +2451,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               </div>
 
               {/* Date Filter */}
-              <div className="mb-6">
-                <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block">Selecione a Data</label>
-                <input 
-                  type="date" 
-                  value={historyDate}
-                  onChange={(e) => setHistoryDate(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 text-white rounded-lg p-3 w-full md:w-auto focus:border-cyan-500 outline-none"
-                />
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block">Data Início</label>
+                  <input 
+                    type="date" 
+                    value={historyStartDate}
+                    onChange={(e) => setHistoryStartDate(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-white rounded-lg p-3 w-full focus:border-cyan-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block">Data Fim</label>
+                  <input 
+                    type="date" 
+                    value={historyEndDate}
+                    onChange={(e) => setHistoryEndDate(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-white rounded-lg p-3 w-full focus:border-cyan-500 outline-none"
+                  />
+                </div>
               </div>
 
               {/* Location Tabs */}
@@ -2466,7 +2480,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                 </div>
               ) : historyRecords.length === 0 ? (
                 <div className="py-10 text-center border border-dashed border-slate-800 rounded-xl">
-                  <p className="text-slate-500">Nenhum registro encontrado nesta data.</p>
+                  <p className="text-slate-500">Nenhum registro encontrado neste período.</p>
                 </div>
               ) : (
                 <>
@@ -2512,7 +2526,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                 {typeLabels[record.type]}
                               </div>
                               <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                                <Clock className="w-3 h-3" /> {record.timestamp.toLocaleTimeString('pt-BR')}
+                                <Clock className="w-3 h-3" /> {record.timestamp.toLocaleDateString('pt-BR')} - {record.timestamp.toLocaleTimeString('pt-BR')}
                               </div>
                             </div>
                             <div className="text-right">
@@ -2615,6 +2629,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                          })
                        )}
                     </div>
+                    <button 
+                      onClick={() => setActiveEmployeeTab('HISTORY')}
+                      className="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-4 h-4" /> Ver Histórico Completo
+                    </button>
                  </div>
                </div>
             </div>
