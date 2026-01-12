@@ -6,7 +6,7 @@ export enum UserRole {
   NONE = 'NONE'
 }
 
-export type ViewState = 'LANDING' | 'LOGIN_COMPANY' | 'REGISTER_COMPANY' | 'LOGIN_EMPLOYEE' | 'DASHBOARD_COMPANY' | 'DASHBOARD_EMPLOYEE';
+export type ViewState = 'LANDING' | 'LOGIN_COMPANY' | 'REGISTER_COMPANY' | 'LOGIN_EMPLOYEE' | 'DASHBOARD_COMPANY' | 'DASHBOARD_EMPLOYEE' | 'FACIAL_ONBOARDING';
 
 export interface CompanyData {
   uid?: string; // Firebase Auth UID

@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -115,6 +115,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     type: 'info',
     visible: false
   });
+
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [showLinkModal, setShowLinkModal] = useState(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
@@ -308,6 +311,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       return currentEmployee;
     });
   }, [employees, showToast]);
+
+  const handleGenerateLink = (employeeId: string) => {
+    const link = `${window.location.origin}/register-face/${employeeId}`;
+    setGeneratedLink(link);
+    setShowLinkModal(true);
+    playSound.success();
+  };
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Link copiado para a área de transferência!', 'success');
+      playSound.click();
+    }, (err) => {
+      console.error('Could not copy text: ', err);
+      showToast('Erro ao copiar o link.', 'error');
+      playSound.error();
+    });
+  };
 
   // -- Camera Lifecycle Effect --
   useEffect(() => {
@@ -2561,49 +2582,51 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                           return (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {filteredEmployees.map(emp => (
-                                <div key={emp.id} className="bg-slate-950 border border-slate-800 rounded-xl p-6 relative group hover:border-cyan-500/40 transition-all duration-300 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+                                <div key={emp.id} className="bg-slate-950 border border-slate-800 rounded-xl p-6 relative group hover:border-cyan-500/40 transition-all duration-300 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)] flex flex-col">
                                   {/* Action Buttons */}
                                   <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditEmployee(emp);
-                                      }} 
-                                      className="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-cyan-500/10 transition-all"
-                                      title="Editar"
-                                    >
-                                      <Edit3 className="w-4 h-4"/>
-                                    </button>
+                                      onClick={(e) => { e.stopPropagation(); handleEditEmployee(emp); }} 
+                                      className="text-slate-500 hover:text-cyan-400 p-2 rounded-lg hover:bg-cyan-500/10 transition-all" title="Editar"
+                                    > <Edit3 className="w-4 h-4"/> </button>
                                     <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteEmployee(emp.id);
-                                      }} 
-                                      className="text-slate-500 hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-all"
-                                      title="Excluir"
-                                    >
-                                      <Trash2 className="w-4 h-4"/>
-                                    </button>
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteEmployee(emp.id); }} 
+                                      className="text-slate-500 hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-all" title="Excluir"
+                                    > <Trash2 className="w-4 h-4"/> </button>
                                   </div>
 
-                                  <div className="flex items-start gap-4 mb-6">
-                                      <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-cyan-500/50 transition-colors">
-                                        {emp.photoBase64 ? (
-                                           <img src={emp.photoBase64} className="w-full h-full object-cover"/>
-                                        ) : (
-                                           <User className="w-8 h-8 text-slate-700"/>
-                                        )}
-                                      </div>
-                                      <div className="min-w-0 pt-1">
-                                        <div className="text-white font-bold text-lg leading-tight truncate uppercase font-tech tracking-wide">{emp.name}</div>
-                                        <div className="text-cyan-500 text-xs font-bold uppercase tracking-wider mb-2">{emp.role || 'SEM CARGO'}</div>
-                                        <span className="inline-block bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-400 font-mono uppercase">
-                                          {emp.shifts && emp.shifts.length > 0 ? `${emp.shifts.length} Turno(s)` : 'Sem Turno'}
-                                        </span>
-                                      </div>
+                                  <div className="flex items-start gap-4">
+                                    <div className="w-16 h-16 rounded-full bg-slate-900 border-2 border-slate-800 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-cyan-500/50 transition-colors">
+                                      {emp.photoBase64 ? (
+                                        <img src={emp.photoBase64} className="w-full h-full object-cover"/>
+                                      ) : (
+                                        <User className="w-8 h-8 text-slate-700"/>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 pt-1">
+                                      <div className="text-white font-bold text-lg leading-tight truncate uppercase font-tech tracking-wide">{emp.name}</div>
+                                      <div className="text-cyan-500 text-xs font-bold uppercase tracking-wider mb-2">{emp.role || 'SEM CARGO'}</div>
+                                      <span className="inline-block bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-400 font-mono uppercase">
+                                        {emp.shifts && emp.shifts.length > 0 ? `${emp.shifts.length} Turno(s)` : 'Sem Turno'}
+                                      </span>
+                                    </div>
                                   </div>
                                   
-                                  <div className="pt-4 border-t border-slate-800/80 flex justify-between items-center text-xs font-mono text-slate-500">
+                                  <div className="flex-grow"></div>
+
+                                  {!emp.photoBase64 && (
+                                    <div className="mt-4 pt-4 border-t border-slate-800/50">
+                                      <button
+                                        onClick={() => handleGenerateLink(emp.id)}
+                                        className="w-full bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold py-2.5 px-3 rounded-lg hover:bg-amber-600/40 transition-colors flex items-center justify-center gap-2"
+                                      >
+                                        <Share2 className="w-3 h-3" />
+                                        GERAR LINK DE CADASTRO FACIAL
+                                      </button>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="pt-4 border-t border-slate-800/80 flex justify-between items-center text-xs font-mono text-slate-500 mt-4">
                                     <span className="flex items-center gap-2">
                                       <span className="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
                                       CPF: {emp.cpf}
@@ -2634,6 +2657,47 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               </div>
             )}
           </div>
+          {/* Link Generation Modal */}
+          {showLinkModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] relative">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                    <Share2 className="w-6 h-6 text-amber-400"/>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-1">Link de Cadastro Facial</h2>
+                    <p className="text-slate-400 text-sm">Envie este link para o funcionário. Ele é único e só pode ser usado uma vez.</p>
+                  </div>
+                </div>
+                
+                <div className="relative my-6">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={generatedLink}
+                    className="w-full bg-slate-950/80 border border-slate-700 text-amber-300 text-sm rounded-lg p-3 pr-12 font-mono"
+                  />
+                  <button 
+                    onClick={() => copyToClipboard(generatedLink)}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg"
+                    title="Copiar link"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex justify-end">
+                  <button 
+                    onClick={() => setShowLinkModal(false)}
+                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     );

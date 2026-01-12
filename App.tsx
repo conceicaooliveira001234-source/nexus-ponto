@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import CompanyLogin from './components/auth/CompanyLogin';
 import CompanyRegister from './components/auth/CompanyRegister';
 import EmployeeLogin from './components/auth/EmployeeLogin';
+import FacialOnboarding from './components/auth/FacialOnboarding';
 import { UserRole, ViewState, CompanyData, EmployeeContext } from './types';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -13,10 +14,21 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LANDING');
   const [currentCompany, setCurrentCompany] = useState<CompanyData | null>(null);
   const [employeeContext, setEmployeeContext] = useState<EmployeeContext | null>(null);
+  const [employeeIdForOnboarding, setEmployeeIdForOnboarding] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Auth Listener
   useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/register-face/')) {
+      const employeeId = path.split('/')[2];
+      if (employeeId) {
+        setEmployeeIdForOnboarding(employeeId);
+        setView('FACIAL_ONBOARDING');
+        setIsLoading(false);
+        return;
+      }
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       // 1. Check for persisted employee context first (for Employee Dashboard persistence)
       const storedEmployeeContext = localStorage.getItem('nexus_employee_context');
@@ -187,6 +199,18 @@ const App: React.FC = () => {
           <EmployeeLogin 
             onLogin={handleEmployeeLogin}
             onBack={() => setView('LANDING')}
+          />
+        );
+
+      case 'FACIAL_ONBOARDING':
+        return (
+          <FacialOnboarding
+            employeeId={employeeIdForOnboarding!}
+            onComplete={() => {
+              window.history.pushState({}, '', '/');
+              setView('LANDING');
+              alert('Cadastro facial concluído com sucesso! Você já pode fechar esta página.');
+            }}
           />
         );
       
