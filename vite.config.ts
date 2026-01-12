@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
         basicSsl(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+          includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
           manifest: {
             name: 'NexusWork Portal',
             short_name: 'NexusWork',
