@@ -1063,11 +1063,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const executeDeleteEmployee = async () => {
     if (!deletionTarget) return;
 
+    const targetId = deletionTarget.id;
+
     try {
-      const { id } = deletionTarget;
       // 1. Find all attendance records for this employee
       const attendanceRef = collection(db, "attendance");
-      const q = query(attendanceRef, where("employeeId", "==", id));
+      const q = query(attendanceRef, where("employeeId", "==", targetId));
       const snapshot = await getDocs(q);
 
       // 2. Delete all found attendance records in a batch
@@ -1077,11 +1078,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           batch.delete(doc.ref);
         });
         await batch.commit();
-        console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${id}.`);
+        console.log(`✅ ${snapshot.size} registros de ponto excluídos para o funcionário ${targetId}.`);
       }
 
       // 3. Delete the employee document itself
-      await deleteDoc(doc(db, "employees", id));
+      await deleteDoc(doc(db, "employees", targetId));
       
       showToast("Funcionário e todos os seus dados foram removidos.", "success");
       playSound.click(); // 🔊 SOM DE CLIQUE
