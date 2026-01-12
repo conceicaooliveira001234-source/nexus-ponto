@@ -107,6 +107,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [historyRecords, setHistoryRecords] = useState<AttendanceRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [selectedHistoryLocation, setSelectedHistoryLocation] = useState<string>('');
+  
+  // -- Real-time Timer State --
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // -- Notification State (Toast) --
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
@@ -125,6 +128,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
+  }, []);
+
+  // -- Timer Effect for Real-time Updates --
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Atualiza a cada segundo
+
+    return () => clearInterval(timer);
   }, []);
 
   // -- Persistência de Login do Funcionário --
@@ -334,6 +346,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   useEffect(() => {
     let isActive = true;
     let stream: MediaStream | null = null;
+    let loginRecognitionInterval: NodeJS.Timeout | null = null;
 
     const initCamera = async () => {
       if (cameraActive) {
@@ -368,11 +381,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           const assignStreamToVideo = (attempts = 0) => {
             if (videoRef.current) {
               videoRef.current.srcObject = mediaStream;
+              // Inverter a câmera visualmente
+              videoRef.current.style.transform = "scaleX(-1)";
               setScanMessage('Posicione o rosto no centro...');
               console.log('✅ Câmera pronta para identificação');
             } else if (attempts < 20 && isActive) {
               // Tenta novamente em 100ms se o elemento de vídeo ainda não estiver montado
-              // Isso corrige o problema de "tela com borda mas sem câmera"
               console.log(`⏳ Aguardando elemento de vídeo... (tentativa ${attempts + 1})`);
               setTimeout(() => assignStreamToVideo(attempts + 1), 100);
             } else {
@@ -413,6 +427,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         console.log('🔌 Desligando câmera...');
         stream.getTracks().forEach(track => track.stop());
       }
+      if (loginRecognitionInterval) {
+        clearInterval(loginRecognitionInterval);
+      }
     };
   }, [cameraActive, modelsLoaded]);
 
@@ -425,15 +442,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('🤖 Iniciando reconhecimento automático para LOGIN...');
       setScanMessage('🔍 Reconhecendo automaticamente...');
       
-      // Aguardar 0.5 segundo para câmera estabilizar (era 1s)
+      // Aguardar 1 segundo para câmera estabilizar
       const startDelay = setTimeout(() => {
         loginRecognitionInterval = setInterval(() => {
           if (!isScanning && !isBiometricVerified) {
             console.log('🔄 Tentando identificar funcionário automaticamente...');
             identifyEmployee();
           }
-        }, 1000); // A cada 1 segundo (era 2.5s)
-      }, 500);
+        }, 2500); // A cada 2.5 segundos
+      }, 1000);
 
       return () => {
         clearTimeout(startDelay);
@@ -447,26 +464,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // -- Continuous Validation for Attendance Flow --
   useEffect(() => {
-    let attendanceValidationInterval: NodeJS.Timeout | null = null;
+    let attendanceRecognitionInterval: NodeJS.Timeout | null = null;
 
-    // 🔥 Validação contínua durante registro de ponto para habilitar botão
+    // 🔥 Validação contínua durante registro de ponto
     if (showAttendanceFlow && locationVerified && cameraActive && modelsLoaded && !isRegisteringAttendance && identifiedEmployee) {
-      console.log('🤖 Iniciando validação contínua para registro de ponto...');
+      console.log('🤖 Iniciando reconhecimento automático para registro de ponto...');
       
-      // Aguardar 0.5 segundo para câmera estabilizar (era 1s)
+      // Aguardar 1 segundo para câmera estabilizar
       const startDelay = setTimeout(() => {
-        attendanceValidationInterval = setInterval(() => {
+        attendanceRecognitionInterval = setInterval(() => {
           if (!isRegisteringAttendance && !isScanning) {
             autoRecognizeAndRegister();
           }
-        }, 1000); // A cada 1 segundo (era 2.5s)
-      }, 500);
+        }, 2500); // A cada 2.5 segundos
+      }, 1000);
 
       return () => {
         clearTimeout(startDelay);
-        if (attendanceValidationInterval) {
+        if (attendanceRecognitionInterval) {
           console.log('🛑 Parando validação contínua de ponto...');
-          clearInterval(attendanceValidationInterval);
+          clearInterval(attendanceRecognitionInterval);
         }
       };
     }
@@ -683,11 +700,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     // 2. Process each day
     return Object.keys(recordsByDay).sort().reverse().map(day => {
       const records = recordsByDay[day];
+      // Sort records chronologically for calculation
       const sortedRecords = [...records].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       
       const entryRecord = sortedRecords.find(r => r.type === 'ENTRY');
-      const exitRecord = sortedRecords.find(r => r.type === 'EXIT');
-
+      
       // Find associated shift (best guess based on entry time)
       let associatedShift: Shift | null = null;
       if (entryRecord && identifiedEmployee.shifts.length > 0) {
@@ -732,40 +749,50 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         totalWorkMinutes = shiftDuration - (breakDuration > 0 ? breakDuration : 0);
       }
 
-      // Calculate actual worked minutes from records
+      // Calculate actual worked minutes from records (Real-time logic)
       let workedMinutes = 0;
-      let totalBreakMinutes = 0;
-      
-      if (entryRecord && exitRecord) {
-        workedMinutes = (exitRecord.timestamp.getTime() - entryRecord.timestamp.getTime()) / (1000 * 60);
+      let lastStartTime: Date | null = null;
+      let isWorking = false;
 
-        const breakStarts = sortedRecords.filter(r => r.type === 'BREAK_START');
-        const breakEnds = sortedRecords.filter(r => r.type === 'BREAK_END');
-        
-        for (let i = 0; i < Math.min(breakStarts.length, breakEnds.length); i++) {
-          const breakDuration = (breakEnds[i].timestamp.getTime() - breakStarts[i].timestamp.getTime()) / (1000 * 60);
-          if (breakDuration > 0) {
-            totalBreakMinutes += breakDuration;
+      for (const record of sortedRecords) {
+        if (record.type === 'ENTRY' || record.type === 'BREAK_END') {
+          lastStartTime = record.timestamp;
+          isWorking = true;
+        } else if (record.type === 'EXIT' || record.type === 'BREAK_START') {
+          if (lastStartTime) {
+            const diff = (record.timestamp.getTime() - lastStartTime.getTime()) / (1000 * 60);
+            workedMinutes += diff;
+            lastStartTime = null;
+            isWorking = false;
           }
         }
-        
-        workedMinutes -= totalBreakMinutes;
+      }
+
+      // If currently working (clocked in but not out), add time until NOW
+      // Only if the record day matches today
+      const todayStr = currentTime.toISOString().split('T')[0];
+      if (isWorking && lastStartTime && day === todayStr) {
+        const now = currentTime;
+        if (now > lastStartTime) {
+          const diff = (now.getTime() - lastStartTime.getTime()) / (1000 * 60);
+          workedMinutes += diff;
+        }
       }
 
       const difference = workedMinutes - totalWorkMinutes;
       
       return {
         day,
-        records,
+        records: sortedRecords.reverse(), // Reverse back for display (newest first)
         summary: {
           totalToWork: formatMinutes(totalWorkMinutes),
           totalWorked: formatMinutes(workedMinutes),
-          hoursOwed: difference < 0 ? formatMinutes(difference) : '00:00',
+          hoursOwed: difference < 0 ? formatMinutes(Math.abs(difference)) : '00:00',
           overtime: difference > 0 ? formatMinutes(difference) : '00:00',
         }
       };
     });
-  }, [historyRecords, identifiedEmployee?.shifts]);
+  }, [historyRecords, identifiedEmployee?.shifts, currentTime]);
 
   // 🔥 Auto-start camera when component mounts (Employee Login)
   useEffect(() => {
@@ -3028,9 +3055,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-2xl">
                   <div className="text-5xl md:text-6xl font-tech font-bold text-white mb-2 tracking-widest">
-                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                  <div className="text-slate-400 font-mono text-sm mb-6 md:mb-8">{currentTime.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                   
                   {/* Location Selector */}
                   <div className="w-full max-w-md mb-4">
