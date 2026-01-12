@@ -119,6 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   });
 
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
 
   const [generatedLink, setGeneratedLink] = useState('');
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -130,6 +131,15 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
+  }, []);
+
+  useEffect(() => {
+    // Detecta se o app está rodando como PWA
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    setIsPwaInstalled(mediaQuery.matches);
+    const handleChange = (e: MediaQueryListEvent) => setIsPwaInstalled(e.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   // -- PWA Install Prompt --
@@ -146,17 +156,25 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }, []);
 
   const handleInstallClick = () => {
-    if (!installPrompt) return;
-    const promptEvent = installPrompt as any;
-    promptEvent.prompt();
-    promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
-      setInstallPrompt(null);
-    });
+    if (installPrompt) {
+      const promptEvent = installPrompt as any;
+      promptEvent.prompt();
+      promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+          showToast('Aplicativo instalado com sucesso!', 'success');
+        } else {
+          console.log('User dismissed the install prompt');
+        }
+        setInstallPrompt(null);
+      });
+    } else {
+      // Se o prompt de instalação não estiver disponível, mostra instruções
+      showToast(
+        'Para instalar: Use o menu do navegador (⋮ ou ...) e procure por "Instalar aplicativo" ou "Adicionar à tela inicial".', 
+        'info'
+      );
+    }
   };
 
   // -- Timer Effect for Real-time Updates --
@@ -2953,11 +2971,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                </div>
             </div>
             <div className="flex items-center gap-4">
-              {installPrompt && (
+              {!isPwaInstalled && (
                 <button 
                   onClick={handleInstallClick} 
                   title="Instalar Aplicativo no Celular"
-                  className="p-3 bg-green-600/80 rounded-full hover:bg-green-500 text-white self-end md:self-auto animate-bounce shadow-lg shadow-green-500/30 border border-green-500/50"
+                  className={`p-3 bg-green-600/80 rounded-full hover:bg-green-500 text-white self-end md:self-auto shadow-lg shadow-green-500/30 border border-green-500/50 ${installPrompt ? 'animate-bounce' : ''}`}
                 >
                   <Download className="w-5 h-5" />
                 </button>
