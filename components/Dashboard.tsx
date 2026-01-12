@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
-  Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut
+  Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
+  AlertCircle, Info
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -102,6 +103,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [customEndDate, setCustomEndDate] = useState('');
   const [filteredRecords, setFilteredRecords] = useState<AttendanceRecord[]>([]);
 
+  // -- Notification State (Toast) --
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; visible: boolean }>({
+    message: '',
+    type: 'info',
+    visible: false
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type, visible: true });
+    // Auto hide after 5 seconds
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, 5000);
+  };
+
   // -- Persistência de Login do Funcionário --
   useEffect(() => {
     if (role === UserRole.EMPLOYEE) {
@@ -163,6 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         console.error('❌ Erro ao carregar modelos face-api.js:', err);
         console.error('💡 Verifique se os arquivos estão em /public/models/');
         setScanMessage("Erro ao carregar modelos de IA. Verifique os arquivos.");
+        showToast("Erro ao carregar modelos de IA. Verifique os arquivos.", "error");
       }
     };
     // Load models for both Company (registration) and Employee (login)
@@ -297,7 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
              } else if (err.name === 'NotReadableError') {
                message = "🔒 Câmera em uso por outro aplicativo. Feche outros apps que usam a câmera.";
              }
-             alert(message);
+             showToast(message, "error");
              setCameraActive(false);
           }
         }
@@ -504,7 +521,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
     if (!currentCompanyId) return;
     if (!tenantCode.trim()) {
-      alert("Por favor, crie um código para sua empresa.");
+      showToast("Por favor, crie um código para sua empresa.", "error");
       return;
     }
     setIsSavingSettings(true);
@@ -514,11 +531,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         tenantCode: tenantCode.trim().toUpperCase()
       });
       setTenantCode(prev => prev.trim().toUpperCase());
-      alert("Código da empresa salvo com sucesso!");
+      showToast("Código da empresa salvo com sucesso!", "success");
       setIsEditingSettings(false); 
     } catch (error) {
       console.error("Error updating settings:", error);
-      alert("Erro ao salvar configurações.");
+      showToast("Erro ao salvar configurações.", "error");
     } finally {
       setIsSavingSettings(false);
     }
@@ -526,7 +543,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocalização não é suportada pelo seu navegador.");
+      showToast("Geolocalização não é suportada pelo seu navegador.", "error");
       return;
     }
     setIsGettingLocation(true);
@@ -561,7 +578,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       },
       (error) => {
         console.error(error);
-        alert("Erro ao obter localização. Verifique as permissões.");
+        showToast("Erro ao obter localização. Verifique as permissões.", "error");
         setIsGettingLocation(false);
       },
       { enableHighAccuracy: true }
@@ -571,7 +588,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLocation.name || !newLocation.latitude || !newLocation.longitude) {
-      alert("Nome e Coordenadas são obrigatórios.");
+      showToast("Nome e Coordenadas são obrigatórios.", "error");
       return;
     }
     try {
@@ -586,7 +603,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
     } catch (error) {
       console.error("Error adding location: ", error);
-      alert("Erro ao salvar local.");
+      showToast("Erro ao salvar local.", "error");
     }
   };
 
@@ -602,19 +619,19 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmployee.name || !newEmployee.locationId) {
-      alert("Preencha o nome e selecione um local.");
+      showToast("Preencha o nome e selecione um local.", "error");
       return;
     }
     if (isProcessingPhoto) {
-      alert("Aguarde o processamento da foto.");
+      showToast("Aguarde o processamento da foto.", "info");
       return;
     }
     if (!newEmployee.photoBase64) {
-      alert("É obrigatório enviar uma foto para o reconhecimento facial.");
+      showToast("É obrigatório enviar uma foto para o reconhecimento facial.", "error");
       return;
     }
     if (!newEmployee.pin || newEmployee.pin.length < 4) {
-      alert("Defina um PIN de pelo menos 4 dígitos.");
+      showToast("Defina um PIN de pelo menos 4 dígitos.", "error");
       return;
     }
     
@@ -624,7 +641,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         await updateDoc(doc(db, "employees", editingEmployeeId), {
           ...newEmployee
         });
-        alert("Funcionário atualizado com sucesso!");
+        showToast("Funcionário atualizado com sucesso!", "success");
         setEditingEmployeeId(null);
       } else {
         // CREATE
@@ -632,7 +649,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           companyId: currentCompanyId,
           ...newEmployee
         });
-        alert("Funcionário cadastrado com sucesso!");
+        showToast("Funcionário cadastrado com sucesso!", "success");
       }
 
       setNewEmployee(initialEmployeeState);
@@ -641,7 +658,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       
     } catch (error) {
        console.error("Error saving employee: ", error);
-       alert("Erro ao salvar funcionário.");
+       showToast("Erro ao salvar funcionário.", "error");
     }
   };
 
@@ -674,7 +691,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         await deleteDoc(doc(db, "employees", id));
       } catch (error) {
         console.error("Error deleting employee:", error);
-        alert("Erro ao remover funcionário.");
+        showToast("Erro ao remover funcionário.", "error");
       }
     }
   };
@@ -738,7 +755,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         console.error("💡 Dica: Feche outros aplicativos que possam estar usando a câmera");
       }
       
-      alert(message);
+      showToast(message, "error");
       setShowCameraCapture(false);
       setIsCaptureReady(false);
     }
@@ -849,7 +866,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       
       if (!detection) {
         console.warn('⚠️ Nenhum rosto detectado na foto capturada');
-        alert("Nenhum rosto detectado na foto. Posicione seu rosto corretamente e tente novamente.");
+        showToast("Nenhum rosto detectado na foto. Posicione seu rosto corretamente e tente novamente.", "error");
         setIsProcessingPhoto(false);
         return;
       }
@@ -867,7 +884,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       
     } catch (error) {
       console.error('❌ Erro ao capturar foto:', error);
-      alert('Erro ao capturar a foto. Tente novamente.');
+      showToast('Erro ao capturar a foto. Tente novamente.', "error");
     } finally {
       setIsProcessingPhoto(false);
     }
@@ -895,7 +912,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const handlePinLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cpfForLogin || !pinForLogin) {
-      alert("CPF e PIN são obrigatórios.");
+      showToast("CPF e PIN são obrigatórios.", "error");
       return;
     }
     
@@ -913,11 +930,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
          setIsBiometricVerified(true);
          stopCamera(); // Parar câmera ao logar com PIN
       } else {
-         alert("PIN incorreto.");
+         showToast("PIN incorreto.", "error");
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Erro ao validar PIN.");
+      showToast(err.message || "Erro ao validar PIN.", "error");
     } finally {
       setIsScanning(false);
     }
@@ -938,7 +955,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!videoRef.current || !canvasRef.current || !employeeContext) return;
     
     if (!modelsLoaded) {
-      alert("Aguarde os modelos de reconhecimento carregarem.");
+      showToast("Aguarde os modelos de reconhecimento carregarem.", "info");
       return;
     }
 
@@ -1020,7 +1037,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
     } catch (err: any) {
       console.error('❌ Erro na identificação:', err);
-      alert(err.message || "Erro na identificação.");
+      showToast(err.message || "Erro na identificação.", "error");
       setScanMessage('Erro. Tente novamente.');
     } finally {
       setIsScanning(false);
@@ -1055,7 +1072,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
       if (!withinRadius) {
         console.warn('⚠️ Funcionário fora do raio permitido');
-        alert(`❌ Você não está no local de trabalho.\n\nVocê precisa estar dentro de um raio de ${currentLocation.radius}m do local para registrar o ponto.`);
+        showToast(`❌ Você não está no local de trabalho.\n\nVocê precisa estar dentro de um raio de ${currentLocation.radius}m do local para registrar o ponto.`, "error");
         setShowAttendanceFlow(false);
         setIsCheckingLocation(false);
         return;
@@ -1079,7 +1096,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
     } catch (error: any) {
       console.error('❌ Erro ao verificar localização:', error);
-      alert(error.message || 'Erro ao verificar localização. Tente novamente.');
+      showToast(error.message || 'Erro ao verificar localização. Tente novamente.', "error");
       setShowAttendanceFlow(false);
       setIsCheckingLocation(false);
     }
@@ -1119,35 +1136,35 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     // Validações individuais com logs específicos
     if (!attendanceType) {
       console.error('❌ ERRO DE VALIDAÇÃO: Tipo de ponto não definido');
-      alert('❌ Erro: Tipo de ponto não definido. Tente novamente.');
+      showToast('❌ Erro: Tipo de ponto não definido. Tente novamente.', "error");
       return;
     }
     console.log('✅ Tipo de ponto validado:', attendanceType);
 
     if (!identifiedEmployee) {
       console.error('❌ ERRO DE VALIDAÇÃO: Funcionário não identificado');
-      alert('❌ Erro: Funcionário não identificado. Faça a identificação facial primeiro.');
+      showToast('❌ Erro: Funcionário não identificado. Faça a identificação facial primeiro.', "error");
       return;
     }
     console.log('✅ Funcionário validado:', identifiedEmployee.name, '(ID:', identifiedEmployee.id, ')');
 
     if (!employeeContext) {
       console.error('❌ ERRO DE VALIDAÇÃO: Contexto do funcionário não encontrado');
-      alert('❌ Erro: Contexto do funcionário não encontrado.');
+      showToast('❌ Erro: Contexto do funcionário não encontrado.', "error");
       return;
     }
     console.log('✅ Contexto validado - Empresa:', employeeContext.companyName, '| Local:', employeeContext.locationName);
 
     if (!currentPosition) {
       console.error('❌ ERRO DE VALIDAÇÃO: Posição atual não obtida');
-      alert('❌ Erro: Não foi possível obter sua localização.');
+      showToast('❌ Erro: Não foi possível obter sua localização.', "error");
       return;
     }
     console.log('✅ Posição validada - Lat:', currentPosition.latitude, '| Lng:', currentPosition.longitude);
 
     if (!currentLocation) {
       console.error('❌ ERRO DE VALIDAÇÃO: Local de trabalho não carregado');
-      alert('❌ Erro: Local de trabalho não carregado.');
+      showToast('❌ Erro: Local de trabalho não carregado.', "error");
       return;
     }
     console.log('✅ Local de trabalho validado:', currentLocation.name);
@@ -1319,7 +1336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       }
       console.log('───────────────────────────────────────────────────────');
       
-      // Feedback visual detalhado
+      // Feedback visual detalhado (agora via Toast)
       const typeLabels = {
         ENTRY: 'Entrada',
         BREAK_START: 'Início da Pausa',
@@ -1327,14 +1344,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         EXIT: 'Saída'
       };
 
-      alert(`✅ Ponto registrado com sucesso!\n\n` +
-            `Tipo: ${typeLabels[attendanceType]}\n` +
-            `Horário: ${now.toLocaleTimeString('pt-BR')}\n` +
-            `Funcionário: ${attendanceData.employeeName}\n` +
-            `Local: ${attendanceData.locationName}\n` +
-            `Distância: ${distanceToLocation.toFixed(0)}m\n\n` +
-            `ID do Registro: ${docRef.id}\n\n` +
-            `✅ Histórico atualizado automaticamente!`);
+      showToast(
+        `Ponto registrado: ${typeLabels[attendanceType]} - ${now.toLocaleTimeString('pt-BR')}`,
+        'success'
+      );
 
       // Limpar estados do fluxo de registro
       console.log('🧹 Limpando estados do fluxo de registro...');
@@ -1380,7 +1393,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         errorMessage += 'Detalhes: ' + (error?.message || 'Erro desconhecido');
       }
       
-      alert(errorMessage);
+      showToast(errorMessage, "error");
       
       console.log('📊 Estado do sistema no momento do erro:');
       console.log('   - Firebase DB conectado:', !!db);
@@ -1501,7 +1514,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         // ❌ NÃO é a mesma pessoa
         setScanMessage('⚠️ Rosto não corresponde');
         // Opcional: alertar usuário
-        // alert('❌ ERRO DE SEGURANÇA\n\nO rosto detectado não corresponde ao funcionário logado.');
+        showToast('❌ ERRO DE SEGURANÇA: O rosto detectado não corresponde ao funcionário logado.', "error");
         setIsScanning(false);
         return;
       }
@@ -2153,6 +2166,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
            </div>
         </div>
         <style>{`@keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }`}</style>
+        
+        {/* Toast Notification */}
+        <div className={`fixed top-4 right-4 z-50 transition-all duration-500 transform ${toast.visible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}>
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl border backdrop-blur-md ${
+            toast.type === 'success' ? 'bg-green-900/90 border-green-500/50 text-white' :
+            toast.type === 'error' ? 'bg-red-900/90 border-red-500/50 text-white' :
+            'bg-slate-900/90 border-slate-700/50 text-white'
+          }`}>
+            {toast.type === 'success' && <CheckCircle className="w-6 h-6 text-green-400" />}
+            {toast.type === 'error' && <AlertCircle className="w-6 h-6 text-red-400" />}
+            {toast.type === 'info' && <Info className="w-6 h-6 text-blue-400" />}
+            <div>
+              <p className="font-bold text-sm">{toast.type === 'success' ? 'Sucesso' : toast.type === 'error' ? 'Erro' : 'Informação'}</p>
+              <p className="text-xs opacity-90 whitespace-pre-line">{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(prev => ({ ...prev, visible: false }))} className="ml-4 opacity-70 hover:opacity-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -2411,6 +2444,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
              </div>
            </div>
          )}
+         
+         {/* Toast Notification */}
+         <div className={`fixed top-4 right-4 z-50 transition-all duration-500 transform ${toast.visible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}>
+           <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl border backdrop-blur-md ${
+             toast.type === 'success' ? 'bg-green-900/90 border-green-500/50 text-white' :
+             toast.type === 'error' ? 'bg-red-900/90 border-red-500/50 text-white' :
+             'bg-slate-900/90 border-slate-700/50 text-white'
+           }`}>
+             {toast.type === 'success' && <CheckCircle className="w-6 h-6 text-green-400" />}
+             {toast.type === 'error' && <AlertCircle className="w-6 h-6 text-red-400" />}
+             {toast.type === 'info' && <Info className="w-6 h-6 text-blue-400" />}
+             <div>
+               <p className="font-bold text-sm">{toast.type === 'success' ? 'Sucesso' : toast.type === 'error' ? 'Erro' : 'Informação'}</p>
+               <p className="text-xs opacity-90 whitespace-pre-line">{toast.message}</p>
+             </div>
+             <button onClick={() => setToast(prev => ({ ...prev, visible: false }))} className="ml-4 opacity-70 hover:opacity-100">
+               <X className="w-4 h-4" />
+             </button>
+           </div>
+         </div>
       </div>
     </div>
   );
