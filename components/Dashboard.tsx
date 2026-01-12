@@ -1503,25 +1503,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     const entryInMinutes = timeToMinutes(shift.entryTime);
     const exitInMinutes = timeToMinutes(shift.exitTime);
 
-    if (entryInMinutes === null || exitInMinutes === null) return { score, status, message, color };
+    // Entry time is mandatory for any calculation
+    if (entryInMinutes === null) return { score, status, message, color };
     
-    const isOvernight = entryInMinutes > exitInMinutes;
+    const isOvernight = exitInMinutes !== null && entryInMinutes > exitInMinutes;
     let targetTimeInMinutes: number | null = null;
-    let isEntry = false;
-
+    
     // Determine target time based on attendance type
     if (type === 'ENTRY') {
       targetTimeInMinutes = entryInMinutes;
-      isEntry = true;
     } else if (type === 'EXIT') {
       targetTimeInMinutes = exitInMinutes;
-      isEntry = false;
     } else if (type === 'BREAK_START') {
       targetTimeInMinutes = timeToMinutes(shift.breakTime);
-      isEntry = true; // Logic is same as entry (lateness)
     } else if (type === 'BREAK_END') {
       targetTimeInMinutes = timeToMinutes(shift.breakEndTime);
-      isEntry = true; // Logic is same as entry (lateness for return)
     }
 
     if (targetTimeInMinutes === null) {
@@ -1531,30 +1527,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     let effectiveNow = nowInMinutes;
     let effectiveTarget = targetTimeInMinutes;
 
-    // Adjust for overnight shifts by moving times to a linear 48-hour scale
+    // Adjust for overnight shifts
     if (isOvernight) {
-      // If target time is on the next day (e.g., exit at 06:00), add 24h
-      if (effectiveTarget < entryInMinutes) {
-        effectiveTarget += 1440; // 24 * 60
-      }
-      // If current time is on the next day, add 24h
-      if (effectiveNow < entryInMinutes) {
-        effectiveNow += 1440;
-      }
+      if (effectiveTarget < entryInMinutes) effectiveTarget += 1440;
+      if (effectiveNow < entryInMinutes) effectiveNow += 1440;
     }
 
     const diff = effectiveNow - effectiveTarget;
-    
-    if (isEntry) {
+
+    // Logic for arriving types (ENTRY, BREAK_END)
+    if (type === 'ENTRY' || type === 'BREAK_END') {
+      const action = type === 'ENTRY' ? 'Entrada' : 'Retorno da Pausa';
       if (diff <= 0) { // On Time or Early
         score = 100;
         status = 'PERFECT';
-        message = diff < -5 ? `Adiantado ${Math.abs(diff)}min` : 'Pontual';
+        message = diff < -5 ? `${action} ${Math.abs(diff)}min adiantado` : `${action} Pontual`;
         color = 'text-green-400';
       } else if (diff <= 10) { // Grace period for being late
         score = 80;
         status = 'GOOD';
-        message = `Atraso ${diff}min (Tolerância)`;
+        message = `Atraso de ${diff}min (Tolerância)`;
         color = 'text-yellow-400';
       } else { // Late
         score = 10;
@@ -1562,21 +1554,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         message = `Atrasado ${diff}min`;
         color = 'text-red-400';
       }
-    } else { // Exit
-      if (diff >= 0) { // On Time or Overtime
+    } 
+    // Logic for leaving types (EXIT, BREAK_START)
+    else if (type === 'EXIT' || type === 'BREAK_START') {
+      const action = type === 'EXIT' ? 'Saída' : 'Início da Pausa';
+      if (diff >= 0) { // On Time or Overtime/Late break
         score = 100;
         status = 'PERFECT';
-        message = diff > 0 ? `Hora Extra +${diff}min` : 'Pontual';
+        message = diff > 5 ? `${action} +${diff}min` : `${action} Pontual`;
         color = 'text-green-400';
       } else if (diff >= -10) { // Grace period for leaving early
         score = 80;
         status = 'GOOD';
-        message = `Saída ${Math.abs(diff)}min antes`;
+        message = `${action} ${Math.abs(diff)}min antes`;
         color = 'text-yellow-400';
       } else { // Left too early
         score = 10;
         status = 'LATE';
-        message = `Saída Antecipada ${Math.abs(diff)}min`;
+        message = `${action} antecipada ${Math.abs(diff)}min`;
         color = 'text-red-400';
       }
     }
