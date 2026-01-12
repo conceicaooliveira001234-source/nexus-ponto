@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download, Bell
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download, Bell, BellOff
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -125,6 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [deletionTarget, setDeletionTarget] = useState<{ id: string; name: string } | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('Notification' in window ? Notification.permission : 'denied');
+  const [showNotificationHelp, setShowNotificationHelp] = useState(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
@@ -3060,6 +3061,29 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
            </div>
          )}
 
+         {activeEmployeeTab === 'DASHBOARD' && notificationPermission === 'denied' && (
+           <div className="bg-slate-800/50 border border-amber-500/30 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in">
+             <div className="flex items-center gap-3 text-left w-full">
+                 <div className="p-2 bg-amber-500/10 rounded-full border border-amber-500/20">
+                   <BellOff className="w-6 h-6 text-amber-400" />
+                 </div>
+                 <div>
+                     <p className="font-bold text-white">Notificações Bloqueadas</p>
+                     <p className="text-sm text-slate-300">Você não receberá lembretes de ponto.</p>
+                 </div>
+             </div>
+             <button
+                 onClick={() => {
+                  setShowNotificationHelp(true);
+                  playSound.click();
+                 }}
+                 className="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-6 rounded-lg transition-colors w-full md:w-auto shrink-0"
+             >
+                 Como Ativar?
+             </button>
+           </div>
+         )}
+
          {activeEmployeeTab === 'HISTORY' ? (
             // HISTORY VIEW
             <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 md:p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
@@ -3504,6 +3528,47 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                 <button 
                   onClick={() => {
                     setShowInstallHelp(false);
+                    playSound.click();
+                  }}
+                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notification Help Modal */}
+        {showNotificationHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] relative">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                  <Bell className="w-6 h-6 text-amber-400"/>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white mb-1">Como Ativar as Notificações</h2>
+                  <p className="text-slate-400 text-sm">As permissões precisam ser alteradas nas configurações do seu navegador.</p>
+                </div>
+              </div>
+              
+              <div className="my-6 space-y-4 text-slate-300 text-sm">
+                <div className="bg-slate-800/50 p-4 rounded-lg">
+                  <p className="font-bold text-amber-400 mb-1">Passo a passo:</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>Clique no ícone de cadeado (🔒) na barra de endereço do seu navegador.</li>
+                    <li>Encontre a opção "Notificações" (Notifications).</li>
+                    <li>Mude a configuração de "Bloqueado" (Blocked) para "Permitir" (Allow).</li>
+                    <li>Recarregue a página para aplicar a alteração.</li>
+                  </ol>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button 
+                  onClick={() => {
+                    setShowNotificationHelp(false);
                     playSound.click();
                   }}
                   className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
