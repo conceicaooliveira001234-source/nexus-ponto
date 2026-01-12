@@ -28,18 +28,10 @@ service cloud.firestore {
           request.auth == null &&
           (resource.data.photoBase64 == null || resource.data.photoBase64 == "") &&
           request.resource.data.photoBase64 is string && request.resource.data.photoBase64 != "" &&
-          request.resource.data.name == resource.data.name &&
-          request.resource.data.cpf == resource.data.cpf &&
-          request.resource.data.companyId == resource.data.companyId &&
-          request.resource.data.role == resource.data.role &&
-          request.resource.data.whatsapp == resource.data.whatsapp &&
-          request.resource.data.shifts == resource.data.shifts &&
-          request.resource.data.locationIds == resource.data.locationIds &&
-          request.resource.data.pin == resource.data.pin &&
-          request.resource.data.shift == resource.data.shift &&
-          request.resource.data.entryTime == resource.data.entryTime &&
-          request.resource.data.breakTime == resource.data.breakTime &&
-          request.resource.data.exitTime == resource.data.exitTime
+          // Garante que APENAS o campo 'photoBase64' está sendo alterado.
+          // Isso é mais seguro e correto do que comparar cada campo individualmente,
+          // especialmente para listas (arrays) como 'shifts' e 'locationIds'.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoBase64'])
         );
     }
     
