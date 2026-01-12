@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
@@ -118,6 +118,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     visible: false
   });
 
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+
   const [generatedLink, setGeneratedLink] = useState('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [deletionTarget, setDeletionTarget] = useState<{ id: string; name: string } | null>(null);
@@ -129,6 +131,33 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
   }, []);
+
+  // -- PWA Install Prompt --
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      console.log('👍 beforeinstallprompt event triggered');
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = () => {
+    if (!installPrompt) return;
+    const promptEvent = installPrompt as any;
+    promptEvent.prompt();
+    promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      setInstallPrompt(null);
+    });
+  };
 
   // -- Timer Effect for Real-time Updates --
   useEffect(() => {
@@ -2923,7 +2952,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                  </div>
                </div>
             </div>
-            <button onClick={handleDashboardLogout} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
+            <div className="flex items-center gap-4">
+              {installPrompt && (
+                <button 
+                  onClick={handleInstallClick} 
+                  title="Instalar Aplicativo no Celular"
+                  className="p-3 bg-green-600/80 rounded-full hover:bg-green-500 text-white self-end md:self-auto animate-bounce shadow-lg shadow-green-500/30 border border-green-500/50"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+              )}
+              <button onClick={handleDashboardLogout} title="Desconectar" className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
+            </div>
          </div>
 
          {activeEmployeeTab === 'HISTORY' ? (
