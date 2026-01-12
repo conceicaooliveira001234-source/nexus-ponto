@@ -101,8 +101,11 @@ Após registrar o ponto, procure por:
 ```javascript
 match /attendance/{attendanceId} {
   allow read: if true;
-  allow create: if true;
-  allow update, delete: if request.auth != null;
+  // Regra de criação segura
+  allow create: if request.resource.data.verified == true
+                && request.resource.data.employeeId is string;
+  allow update: if request.auth != null;
+  allow delete: if request.auth != null || (resource.data.isTest == true);
 }
 ```
 
