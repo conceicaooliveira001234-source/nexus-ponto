@@ -1210,10 +1210,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
     // Determine target time based on attendance type
     if (type === 'ENTRY') {
+      if (!shift.entryTime) return { score, status, message, color };
       const [h, m] = shift.entryTime.split(':').map(Number);
       targetTime = h * 60 + m;
       isEntry = true;
     } else if (type === 'EXIT') {
+      if (!shift.exitTime) return { score, status, message, color };
       const [h, m] = shift.exitTime.split(':').map(Number);
       targetTime = h * 60 + m;
       isEntry = false;
@@ -2793,7 +2795,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         <option value="" disabled>Selecione um turno...</option>
                         {identifiedEmployee?.shifts?.filter(isShiftVisible).map(shift => (
                           <option key={shift.id} value={shift.id}>
-                            {shift.name} ({shift.entryTime} - {shift.exitTime})
+                            {shift.name || 'Turno sem nome'} ({shift.entryTime || 'N/A'} - {shift.exitTime || 'N/A'})
                           </option>
                         ))}
                       </select>
