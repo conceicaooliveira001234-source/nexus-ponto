@@ -99,13 +99,9 @@ Após registrar o ponto, procure por:
 4. Verifique se a collection `attendance` tem estas regras:
 
 ```javascript
+// ATTENDANCE (Para bater o ponto)
 match /attendance/{attendanceId} {
-  allow read: if true;
-  // Regra de criação segura
-  allow create: if request.resource.data.verified == true
-                && request.resource.data.employeeId is string;
-  allow update: if request.auth != null;
-  allow delete: if request.auth != null || (resource.data.isTest == true);
+  allow read, write: if true;
 }
 ```
 
