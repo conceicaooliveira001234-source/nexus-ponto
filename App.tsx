@@ -282,6 +282,8 @@ const App: React.FC = () => {
             onBack={handleLogout} 
             currentCompanyId={employeeContext?.companyId}
             employeeContext={employeeContext}
+            isPwaInstalled={isPwaInstalled}
+            installPrompt={installPrompt}
           />
         );
         
