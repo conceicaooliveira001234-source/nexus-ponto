@@ -6,6 +6,7 @@ import { db, auth } from '../../lib/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { CompanyData, ServiceLocation, EmployeeContext } from '../../types';
+import { playSound } from '../../lib/sounds';
 
 interface EmployeeLoginProps {
   onLogin: (context: EmployeeContext) => void;
@@ -29,10 +30,10 @@ const EmployeeLogin: React.FC<EmployeeLoginProps> = ({ onLogin, onBack }) => {
     setIsLoading(true);
     setError('');
     setFoundCompany(null);
+    playSound.click();
 
     try {
       // 1. Authenticate Anonymously if not already logged in
-      // This is crucial for Firebase Security Rules that require 'request.auth != null'
       if (!auth.currentUser) {
         await signInAnonymously(auth);
       }
@@ -44,6 +45,7 @@ const EmployeeLogin: React.FC<EmployeeLoginProps> = ({ onLogin, onBack }) => {
 
       if (querySnapshot.empty) {
         setError('Código de empresa não encontrado. Verifique com seu gestor.');
+        playSound.error();
         setIsLoading(false);
         return;
       }
@@ -64,9 +66,11 @@ const EmployeeLogin: React.FC<EmployeeLoginProps> = ({ onLogin, onBack }) => {
 
       setCompanyLocations(locs);
       setStep('LOCATION');
+      playSound.success();
 
     } catch (err: any) {
       console.error("Error searching company:", err);
+      playSound.error();
       if (err.code === 'permission-denied') {
          setError('Erro de permissão: Regras de segurança bloqueando acesso. Tente novamente.');
       } else if (err.code === 'failed-precondition') {
@@ -81,6 +85,7 @@ const EmployeeLogin: React.FC<EmployeeLoginProps> = ({ onLogin, onBack }) => {
 
   const handleSelectLocation = (loc: ServiceLocation) => {
     if (foundCompany && foundCompany.uid) {
+      playSound.click();
       onLogin({
         companyId: foundCompany.uid,
         companyName: foundCompany.companyName,
@@ -96,7 +101,10 @@ const EmployeeLogin: React.FC<EmployeeLoginProps> = ({ onLogin, onBack }) => {
       
       <div className="relative z-30 w-full max-w-md animate-float" style={{ animationDuration: '8s' }}>
         <button 
-          onClick={() => step === 'LOCATION' ? setStep('CODE') : onBack()}
+          onClick={() => {
+            playSound.click();
+            step === 'LOCATION' ? setStep('CODE') : onBack();
+          }}
           className="absolute -top-12 left-0 text-slate-400 hover:text-fuchsia-400 transition-colors flex items-center gap-2 font-mono text-xs uppercase"
         >
           <ArrowLeft className="w-4 h-4" /> {step === 'LOCATION' ? 'Trocar Código' : 'Voltar'}

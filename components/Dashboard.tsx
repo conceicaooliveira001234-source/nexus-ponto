@@ -12,6 +12,7 @@ import { db } from '../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import * as faceapi from 'face-api.js';
 import { getCurrentPosition, isWithinRadius, calculateDistance } from '../lib/geolocation';
+import { playSound } from '../lib/sounds';
 
 interface DashboardProps {
   role: UserRole;
@@ -267,6 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       if (cameraActive) {
         setScanMessage(modelsLoaded ? 'Aguardando câmera...' : 'Carregando modelos...');
         console.log('📷 Iniciando câmera para login facial...');
+        playSound.cameraOpen(); // 🔊 SOM DE CÂMERA
         
         try {
           // Try user facing mode first
@@ -323,6 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                message = "🔒 Câmera em uso por outro aplicativo. Feche outros apps que usam a câmera.";
              }
              showToast(message, "error");
+             playSound.error(); // 🔊 SOM DE ERRO
              setCameraActive(false);
           }
         }
@@ -530,6 +533,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!currentCompanyId) return;
     if (!tenantCode.trim()) {
       showToast("Por favor, crie um código para sua empresa.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     setIsSavingSettings(true);
@@ -540,10 +544,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       });
       setTenantCode(prev => prev.trim().toUpperCase());
       showToast("Código da empresa salvo com sucesso!", "success");
+      playSound.success(); // 🔊 SOM DE SUCESSO
       setIsEditingSettings(false); 
     } catch (error) {
       console.error("Error updating settings:", error);
       showToast("Erro ao salvar configurações.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
     } finally {
       setIsSavingSettings(false);
     }
@@ -552,6 +558,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       showToast("Geolocalização não é suportada pelo seu navegador.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     setIsGettingLocation(true);
@@ -578,6 +585,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             ].filter(Boolean).join(', ');
             setNewLocation(prev => ({ ...prev, address: fullAddress || data.display_name }));
           }
+          playSound.success(); // 🔊 SOM DE SUCESSO
         } catch (error) {
           console.error("Erro ao buscar endereço:", error);
         } finally {
@@ -587,6 +595,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       (error) => {
         console.error(error);
         showToast("Erro ao obter localização. Verifique as permissões.", "error");
+        playSound.error(); // 🔊 SOM DE ERRO
         setIsGettingLocation(false);
       },
       { enableHighAccuracy: true }
@@ -597,6 +606,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     e.preventDefault();
     if (!newLocation.name || !newLocation.latitude || !newLocation.longitude) {
       showToast("Nome e Coordenadas são obrigatórios.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     try {
@@ -609,15 +619,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         radius: parseInt(newLocation.radius) || 100
       });
       setNewLocation({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+      playSound.success(); // 🔊 SOM DE SUCESSO
     } catch (error) {
       console.error("Error adding location: ", error);
       showToast("Erro ao salvar local.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
     }
   };
 
   const handleDeleteLocation = async (id: string) => {
     try {
       await deleteDoc(doc(db, "locations", id));
+      playSound.click(); // 🔊 SOM DE CLIQUE
     } catch (error) {
       console.error("Error deleting location:", error);
     }
@@ -628,6 +641,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     e.preventDefault();
     if (!newEmployee.name || newEmployee.locationIds.length === 0) {
       showToast("Preencha o nome e selecione pelo menos um local.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     if (isProcessingPhoto) {
@@ -636,10 +650,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
     if (!newEmployee.photoBase64) {
       showToast("É obrigatório enviar uma foto para o reconhecimento facial.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     if (!newEmployee.pin || newEmployee.pin.length < 4) {
       showToast("Defina um PIN de pelo menos 4 dígitos.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     
@@ -663,12 +679,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       }
 
       setNewEmployee(initialEmployeeState);
+      playSound.success(); // 🔊 SOM DE SUCESSO
       // Optional: switch back to list if editing
       if (editingEmployeeId) setEmployeeSubTab('LIST');
       
     } catch (error) {
        console.error("Error saving employee: ", error);
        showToast("Erro ao salvar funcionário.", "error");
+       playSound.error(); // 🔊 SOM DE ERRO
     }
   };
 
@@ -688,20 +706,24 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       pin: emp.pin || ''
     });
     setEmployeeSubTab('REGISTER');
+    playSound.click(); // 🔊 SOM DE CLIQUE
   };
 
   const handleCancelEdit = () => {
     setEditingEmployeeId(null);
     setNewEmployee(initialEmployeeState);
+    playSound.click(); // 🔊 SOM DE CLIQUE
   };
 
   const handleDeleteEmployee = async (id: string) => {
     if (window.confirm("Tem certeza que deseja DELETAR este funcionário? Essa ação não pode ser desfeita.")) {
       try {
         await deleteDoc(doc(db, "employees", id));
+        playSound.click(); // 🔊 SOM DE CLIQUE
       } catch (error) {
         console.error("Error deleting employee:", error);
         showToast("Erro ao remover funcionário.", "error");
+        playSound.error(); // 🔊 SOM DE ERRO
       }
     }
   };
@@ -725,6 +747,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setIsValidatingFace(false);
     
     console.log('📷 Iniciando câmera para cadastro facial...');
+    playSound.cameraOpen(); // 🔊 SOM DE CÂMERA
     
     try {
       let mediaStream: MediaStream;
@@ -766,6 +789,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       }
       
       showToast(message, "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       setShowCameraCapture(false);
       setIsCaptureReady(false);
     }
@@ -877,6 +901,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       if (!detection) {
         console.warn('⚠️ Nenhum rosto detectado na foto capturada');
         showToast("Nenhum rosto detectado na foto. Posicione seu rosto corretamente e tente novamente.", "error");
+        playSound.error(); // 🔊 SOM DE ERRO
         setIsProcessingPhoto(false);
         return;
       }
@@ -888,6 +913,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       setNewEmployee(prev => ({ ...prev, photoBase64: dataUrl }));
       
       console.log('💾 Foto salva no estado do funcionário');
+      playSound.success(); // 🔊 SOM DE SUCESSO
       
       // Stop camera after successful capture
       stopCaptureCamera();
@@ -895,6 +921,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     } catch (error) {
       console.error('❌ Erro ao capturar foto:', error);
       showToast('Erro ao capturar a foto. Tente novamente.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
     } finally {
       setIsProcessingPhoto(false);
     }
@@ -923,6 +950,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     e.preventDefault();
     if (!cpfForLogin || !pinForLogin) {
       showToast("CPF e PIN são obrigatórios.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     
@@ -938,13 +966,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       if (found.pin === pinForLogin) {
          setIdentifiedEmployee(found);
          setIsBiometricVerified(true);
+         playSound.success(); // 🔊 SOM DE SUCESSO
          stopCamera(); // Parar câmera ao logar com PIN
       } else {
          showToast("PIN incorreto.", "error");
+         playSound.error(); // 🔊 SOM DE ERRO
       }
     } catch (err: any) {
       console.error(err);
       showToast(err.message || "Erro ao validar PIN.", "error");
+      playSound.error(); // 🔊 SOM DE ERRO
     } finally {
       setIsScanning(false);
     }
@@ -1036,6 +1067,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         setIdentifiedEmployee(bestMatch.employee);
         setIsBiometricVerified(true);
         setScanMessage('Identificação bem-sucedida!');
+        playSound.success(); // 🔊 SOM DE SUCESSO
         stopCamera(); // Parar câmera ao identificar com sucesso
         
         // NÃO registrar automaticamente - deixar o usuário confirmar no modal
@@ -1083,6 +1115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       if (!withinRadius) {
         console.warn('⚠️ Funcionário fora do raio permitido');
         showToast(`❌ Você não está no local de trabalho.\n\nVocê precisa estar dentro de um raio de ${currentLocation.radius}m do local para registrar o ponto.`, "error");
+        playSound.error(); // 🔊 SOM DE ERRO
         setShowAttendanceFlow(false);
         setIsCheckingLocation(false);
         return;
@@ -1107,6 +1140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     } catch (error: any) {
       console.error('❌ Erro ao verificar localização:', error);
       showToast(error.message || 'Erro ao verificar localização. Tente novamente.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       setShowAttendanceFlow(false);
       setIsCheckingLocation(false);
     }
@@ -1147,6 +1181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!attendanceType) {
       console.error('❌ ERRO DE VALIDAÇÃO: Tipo de ponto não definido');
       showToast('❌ Erro: Tipo de ponto não definido. Tente novamente.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     console.log('✅ Tipo de ponto validado:', attendanceType);
@@ -1154,6 +1189,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!identifiedEmployee) {
       console.error('❌ ERRO DE VALIDAÇÃO: Funcionário não identificado');
       showToast('❌ Erro: Funcionário não identificado. Faça a identificação facial primeiro.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     console.log('✅ Funcionário validado:', identifiedEmployee.name, '(ID:', identifiedEmployee.id, ')');
@@ -1161,6 +1197,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!employeeContext) {
       console.error('❌ ERRO DE VALIDAÇÃO: Contexto do funcionário não encontrado');
       showToast('❌ Erro: Contexto do funcionário não encontrado.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     console.log('✅ Contexto validado - Empresa:', employeeContext.companyName, '| Local:', employeeContext.locationName);
@@ -1168,6 +1205,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!currentPosition) {
       console.error('❌ ERRO DE VALIDAÇÃO: Posição atual não obtida');
       showToast('❌ Erro: Não foi possível obter sua localização.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     console.log('✅ Posição validada - Lat:', currentPosition.latitude, '| Lng:', currentPosition.longitude);
@@ -1175,6 +1213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     if (!currentLocation) {
       console.error('❌ ERRO DE VALIDAÇÃO: Local de trabalho não carregado');
       showToast('❌ Erro: Local de trabalho não carregado.', "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
     console.log('✅ Local de trabalho validado:', currentLocation.name);
@@ -1358,6 +1397,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         `Ponto registrado: ${typeLabels[attendanceType]} - ${now.toLocaleTimeString('pt-BR')}`,
         'success'
       );
+      playSound.attendance(); // 🔊 SOM DE PONTO REGISTRADO
 
       // Limpar estados do fluxo de registro
       console.log('🧹 Limpando estados do fluxo de registro...');
@@ -1404,6 +1444,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       }
       
       showToast(errorMessage, "error");
+      playSound.error(); // 🔊 SOM DE ERRO
       
       console.log('📊 Estado do sistema no momento do erro:');
       console.log('   - Firebase DB conectado:', !!db);
@@ -1429,6 +1470,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setIsCheckingLocation(false);
     setScanMessage('');
     stopCamera();
+    playSound.click(); // 🔊 SOM DE CLIQUE
     // NÃO resetar isBiometricVerified nem identifiedEmployee - o usuário continua logado
   };
 
@@ -1525,6 +1567,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         setScanMessage('⚠️ Rosto não corresponde');
         // Opcional: alertar usuário
         showToast('❌ ERRO DE SEGURANÇA: O rosto detectado não corresponde ao funcionário logado.', "error");
+        playSound.error(); // 🔊 SOM DE ERRO
         setIsScanning(false);
         return;
       }
@@ -1550,7 +1593,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const renderSidebarItem = (tab: Tab, label: string, icon: React.ReactNode) => (
     <button
-      onClick={() => setActiveTab(tab)}
+      onClick={() => { setActiveTab(tab); playSound.click(); }}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 font-mono text-sm uppercase tracking-wider ${
         activeTab === tab 
           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 

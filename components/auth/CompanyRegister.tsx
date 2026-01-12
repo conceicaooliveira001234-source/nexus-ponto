@@ -3,6 +3,7 @@ import { Building2, Mail, Lock, Phone, FileBadge, ArrowLeft, CheckCircle2, Loade
 import TechInput from '../ui/TechInput';
 import TechBackground from '../TechBackground';
 import { CompanyData } from '../../types';
+import { playSound } from '../../lib/sounds';
 
 interface CompanyRegisterProps {
   onRegister: (data: CompanyData) => void;
@@ -55,6 +56,7 @@ const CompanyRegister: React.FC<CompanyRegisterProps> = ({ onRegister, onBack })
           ...prev,
           companyName: name
         }));
+        playSound.success();
       }
     } catch (error) {
       console.error("Error fetching CNPJ:", error);
@@ -85,6 +87,7 @@ const CompanyRegister: React.FC<CompanyRegisterProps> = ({ onRegister, onBack })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    playSound.click();
     onRegister(formData);
   };
 
@@ -94,7 +97,7 @@ const CompanyRegister: React.FC<CompanyRegisterProps> = ({ onRegister, onBack })
       
       <div className="relative z-30 w-full max-w-2xl">
         <button 
-          onClick={onBack}
+          onClick={() => { playSound.click(); onBack(); }}
           className="mb-6 text-slate-400 hover:text-cyan-400 transition-colors flex items-center gap-2 font-mono text-xs uppercase"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar ao Login

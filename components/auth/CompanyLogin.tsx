@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, ArrowLeft, LogIn } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import TechBackground from '../TechBackground';
+import { playSound } from '../../lib/sounds';
 
 interface CompanyLoginProps {
   onLogin: (email: string, pass: string) => void;
@@ -15,6 +16,7 @@ const CompanyLogin: React.FC<CompanyLoginProps> = ({ onLogin, onRegisterClick, o
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    playSound.click();
     onLogin(email, password);
   };
 
@@ -24,7 +26,7 @@ const CompanyLogin: React.FC<CompanyLoginProps> = ({ onLogin, onRegisterClick, o
       
       <div className="relative z-30 w-full max-w-md animate-float" style={{ animationDuration: '8s' }}>
         <button 
-          onClick={onBack}
+          onClick={() => { playSound.click(); onBack(); }}
           className="absolute -top-12 left-0 text-slate-400 hover:text-cyan-400 transition-colors flex items-center gap-2 font-mono text-xs uppercase"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
@@ -69,7 +71,7 @@ const CompanyLogin: React.FC<CompanyLoginProps> = ({ onLogin, onRegisterClick, o
           <div className="mt-8 pt-6 border-t border-slate-800 text-center">
             <p className="text-slate-500 text-sm mb-3">Não possui cadastro?</p>
             <button 
-              onClick={onRegisterClick}
+              onClick={() => { playSound.click(); onRegisterClick(); }}
               className="text-cyan-400 hover:text-cyan-300 font-bold text-sm tracking-wide uppercase border-b border-transparent hover:border-cyan-400 transition-all"
             >
               Criar Nova Conta
