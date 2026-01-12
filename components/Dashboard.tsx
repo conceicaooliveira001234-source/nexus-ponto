@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
@@ -656,6 +656,35 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       }
     }
   }, [identifiedEmployee, currentLocation]); // Re-evaluate when location changes (conceptually linked) or employee loads
+
+  // -- Logic for Sequential Attendance Buttons --
+  const todayAttendance = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    // attendanceRecords is already sorted desc by timestamp
+    return attendanceRecords.filter(record => record.timestamp >= todayStart);
+  }, [attendanceRecords]);
+
+  const nextAction = useMemo(() => {
+    const lastRecord = todayAttendance[0]; // Newest record of the day
+
+    if (!lastRecord || lastRecord.type === 'EXIT') {
+      return { type: 'ENTRY' as AttendanceType, label: 'ENTRADA', icon: <LogIn className="w-5 h-5 md:w-6 md:h-6" />, color: 'from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' };
+    }
+
+    switch (lastRecord.type) {
+      case 'ENTRY':
+        return { type: 'BREAK_START' as AttendanceType, label: 'INÍCIO PAUSA', icon: <Coffee className="w-5 h-5 md:w-6 md:h-6" />, color: 'from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]' };
+      case 'BREAK_START':
+        return { type: 'BREAK_END' as AttendanceType, label: 'FIM PAUSA', icon: <Play className="w-5 h-5 md:w-6 md:h-6" />, color: 'from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]' };
+      case 'BREAK_END':
+        return { type: 'EXIT' as AttendanceType, label: 'SAÍDA', icon: <LogOut className="w-5 h-5 md:w-6 md:h-6" />, color: 'from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]' };
+      default:
+        // Fallback case, same as no records
+        return { type: 'ENTRY' as AttendanceType, label: 'ENTRADA', icon: <LogIn className="w-5 h-5 md:w-6 md:h-6" />, color: 'from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' };
+    }
+  }, [todayAttendance]);
 
   // -- Handlers --
 
@@ -2814,39 +2843,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                     )}
                   </div>
 
-                  {/* Attendance Type Buttons */}
+                  {/* Attendance Action Button */}
                   <div className="w-full max-w-md space-y-3 mb-6">
-                    <button 
-                      onClick={() => startAttendanceFlow('ENTRY')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
-                      className="w-full py-3 md:py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                    >
-                      <LogIn className="w-5 h-5 md:w-6 md:h-6" /> ENTRADA
-                    </button>
-
-                    <button 
-                      onClick={() => startAttendanceFlow('BREAK_START')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
-                      className="w-full py-3 md:py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                    >
-                      <Coffee className="w-5 h-5 md:w-6 md:h-6" /> INÍCIO PAUSA
-                    </button>
-
-                    <button 
-                      onClick={() => startAttendanceFlow('BREAK_END')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
-                      className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                    >
-                      <Play className="w-5 h-5 md:w-6 md:h-6" /> FIM PAUSA
-                    </button>
-
-                    <button 
-                      onClick={() => startAttendanceFlow('EXIT')}
-                      disabled={isCheckingLocation || isRegisteringAttendance || !currentLocation || !currentShift}
-                      className="w-full py-3 md:py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                    >
-                      <LogOut className="w-5 h-5 md:w-6 md:h-6" /> SAÍDA
-                    </button>
+                    {currentLocation && currentShift ? (
+                      <button 
+                        onClick={() => startAttendanceFlow(nextAction.type)}
+                        disabled={isCheckingLocation || isRegisteringAttendance}
+                        className={`w-full py-3 md:py-4 bg-gradient-to-r ${nextAction.color} text-white font-bold rounded-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base`}
+                      >
+                        {nextAction.icon} {nextAction.label}
+                      </button>
+                    ) : (
+                      <div className="text-center p-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-xs">
+                        Selecione um local e turno para registrar o ponto.
+                      </div>
+                    )}
                   </div>
                   
                   {currentLocation && (
