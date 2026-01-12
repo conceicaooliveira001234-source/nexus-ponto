@@ -1010,22 +1010,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         await updateDoc(doc(db, "employees", editingEmployeeId), employeeData);
         showToast("Funcionário atualizado com sucesso!", "success");
         setEditingEmployeeId(null);
+        setNewEmployee(initialEmployeeState);
+        setEmployeeSubTab('LIST');
       } else {
         // CREATE
         const docRef = await addDoc(collection(db, "employees"), employeeData);
         
         if (employeeData.photoBase64) {
           showToast("Funcionário cadastrado com sucesso!", "success");
+          setNewEmployee(initialEmployeeState);
         } else {
-          showToast("Funcionário salvo! Use o link abaixo para o cadastro facial.", "info");
-          handleGenerateLink(docRef.id);
+          showToast("Funcionário salvo! Agora você pode gerar o link para o cadastro facial.", "info");
+          setEditingEmployeeId(docRef.id);
         }
       }
-
-      setNewEmployee(initialEmployeeState);
       playSound.success(); // 🔊 SOM DE SUCESSO
-      // Optional: switch back to list if editing
-      if (editingEmployeeId) setEmployeeSubTab('LIST');
       
     } catch (error) {
        console.error("Error saving employee: ", error);
@@ -2276,9 +2275,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                 </button>
                                 
                                 {!newEmployee.photoBase64 && (
-                                  <p className="mt-3 text-xs text-slate-500 text-center max-w-xs">
-                                    O funcionário pode cadastrar o rosto agora ou você pode gerar um link de cadastro após salvar.
-                                  </p>
+                                  editingEmployeeId ? (
+                                    <div className="mt-4 pt-4 border-t border-slate-800/50 w-full max-w-sm">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateLink(editingEmployeeId)}
+                                        className="w-full bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold py-2.5 px-3 rounded-lg hover:bg-amber-600/40 transition-colors flex items-center justify-center gap-2"
+                                      >
+                                        <Share2 className="w-3 h-3" />
+                                        GERAR LINK DE CADASTRO FACIAL
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <p className="mt-3 text-xs text-slate-500 text-center max-w-xs">
+                                      O funcionário pode cadastrar o rosto agora ou você pode gerar um link de cadastro após salvar.
+                                    </p>
+                                  )
                                 )}
                                 
                                 {newEmployee.photoBase64 && (
