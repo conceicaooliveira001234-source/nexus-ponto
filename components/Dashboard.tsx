@@ -624,6 +624,44 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [identifiedEmployee, currentLocation]); // Re-evaluate when employee loads or location changes conceptually
 
+  // Auto-filter shifts based on current time
+  const availableShifts = useMemo(() => {
+    if (!identifiedEmployee?.shifts) return [];
+
+    const now = new Date();
+    const nowInMinutes = now.getHours() * 60 + now.getMinutes();
+    const GRACE_PERIOD_BEFORE = 120; // 2 hours
+    const GRACE_PERIOD_AFTER = 60; // 1 hour
+
+    const timeToMinutes = (timeStr: string | undefined): number | null => {
+      if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    return identifiedEmployee.shifts.filter(shift => {
+      const entryInMinutes = timeToMinutes(shift.entryTime);
+      const exitInMinutes = timeToMinutes(shift.exitTime);
+
+      if (entryInMinutes === null || exitInMinutes === null) {
+        return true; // Se o turno não tem horário, sempre mostra
+      }
+
+      const windowStart = (entryInMinutes - GRACE_PERIOD_BEFORE + 1440) % 1440;
+      const windowEnd = (exitInMinutes + GRACE_PERIOD_AFTER + 1440) % 1440;
+      
+      const isWindowOvernight = windowStart > windowEnd;
+
+      if (isWindowOvernight) {
+        // Ex: Janela 20:00 - 07:00. `now` é válido se >= 20:00 OU <= 07:00
+        return nowInMinutes >= windowStart || nowInMinutes <= windowEnd;
+      } else {
+        // Ex: Janela 06:00 - 18:00. `now` deve estar entre os dois.
+        return nowInMinutes >= windowStart && nowInMinutes <= windowEnd;
+      }
+    });
+  }, [identifiedEmployee?.shifts]);
+
   // -- Logic for Sequential Attendance Buttons --
   const todayAttendance = useMemo(() => {
     const todayStart = new Date();
@@ -1260,81 +1298,87 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
     if (!shift) return { score, status, message, color };
 
-    const now = timestamp;
-    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const timeToMinutes = (timeStr: string | undefined): number | null => {
+      if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    };
 
-    let targetTime = 0;
+    const nowInMinutes = timestamp.getHours() * 60 + timestamp.getMinutes();
+    const entryInMinutes = timeToMinutes(shift.entryTime);
+    const exitInMinutes = timeToMinutes(shift.exitTime);
+
+    if (entryInMinutes === null || exitInMinutes === null) return { score, status, message, color };
+    
+    const isOvernight = entryInMinutes > exitInMinutes;
+    let targetTimeInMinutes: number | null = null;
     let isEntry = false;
 
     // Determine target time based on attendance type
     if (type === 'ENTRY') {
-      if (!shift.entryTime) return { score, status, message, color };
-      const [h, m] = shift.entryTime.split(':').map(Number);
-      targetTime = h * 60 + m;
+      targetTimeInMinutes = entryInMinutes;
       isEntry = true;
     } else if (type === 'EXIT') {
-      if (!shift.exitTime) return { score, status, message, color };
-      const [h, m] = shift.exitTime.split(':').map(Number);
-      targetTime = h * 60 + m;
+      targetTimeInMinutes = exitInMinutes;
       isEntry = false;
-    } else if (type === 'BREAK_START' && shift.breakTime) {
-      const [h, m] = shift.breakTime.split(':').map(Number);
-      targetTime = h * 60 + m;
+    } else if (type === 'BREAK_START') {
+      targetTimeInMinutes = timeToMinutes(shift.breakTime);
       isEntry = true; // Logic is same as entry (lateness)
-    } else if (type === 'BREAK_END' && shift.breakEndTime) {
-      const [h, m] = shift.breakEndTime.split(':').map(Number);
-      targetTime = h * 60 + m;
+    } else if (type === 'BREAK_END') {
+      targetTimeInMinutes = timeToMinutes(shift.breakEndTime);
       isEntry = true; // Logic is same as entry (lateness for return)
     }
-    else {
-      // No specific time for this type
+
+    if (targetTimeInMinutes === null) {
       return { score, status, message, color };
     }
 
-    // Calculate difference in minutes
-    // Entry: Positive diff means late
-    // Exit: Positive diff means early (if target > current) or overtime (if current > target)
-    // Let's simplify: diff = current - target
-    const diff = currentTime - targetTime;
-    
-    // Handle midnight crossing if needed (simplified for now)
+    let effectiveNow = nowInMinutes;
+    let effectiveTarget = targetTimeInMinutes;
+
+    // Adjust for overnight shifts by moving times to a linear 48-hour scale
+    if (isOvernight) {
+      // If target time is on the next day (e.g., exit at 06:00), add 24h
+      if (effectiveTarget < entryInMinutes) {
+        effectiveTarget += 1440; // 24 * 60
+      }
+      // If current time is on the next day, add 24h
+      if (effectiveNow < entryInMinutes) {
+        effectiveNow += 1440;
+      }
+    }
+
+    const diff = effectiveNow - effectiveTarget;
     
     if (isEntry) {
-      if (diff <= 0) {
-        // Early or On Time
+      if (diff <= 0) { // On Time or Early
         score = 100;
         status = 'PERFECT';
         message = diff < -5 ? `Adiantado ${Math.abs(diff)}min` : 'Pontual';
         color = 'text-green-400';
-      } else if (diff <= 10) {
-        // Tolerância
+      } else if (diff <= 10) { // Grace period for being late
         score = 80;
         status = 'GOOD';
         message = `Atraso ${diff}min (Tolerância)`;
         color = 'text-yellow-400';
-      } else {
-        // Late
+      } else { // Late
         score = 10;
         status = 'LATE';
         message = `Atrasado ${diff}min`;
         color = 'text-red-400';
       }
-    } else {
-      // Exit
-      if (diff >= 0) {
-        // On Time or Overtime
+    } else { // Exit
+      if (diff >= 0) { // On Time or Overtime
         score = 100;
         status = 'PERFECT';
         message = diff > 0 ? `Hora Extra +${diff}min` : 'Pontual';
         color = 'text-green-400';
-      } else if (diff >= -10) {
-        // Tolerância (saindo um pouco antes)
+      } else if (diff >= -10) { // Grace period for leaving early
         score = 80;
         status = 'GOOD';
         message = `Saída ${Math.abs(diff)}min antes`;
         color = 'text-yellow-400';
-      } else {
-        // Early exit
+      } else { // Left too early
         score = 10;
         status = 'LATE';
         message = `Saída Antecipada ${Math.abs(diff)}min`;
@@ -2774,7 +2818,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   <div className="w-full max-w-md mb-6">
                     <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block text-left">Turno de Trabalho</label>
                     <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                      {identifiedEmployee?.shifts?.map(shift => (
+                      {availableShifts.map(shift => (
                         <button
                           key={shift.id}
                           onClick={() => {
@@ -2804,10 +2848,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         <AlertCircle className="w-3 h-3" /> Selecione um turno para registrar o ponto.
                       </p>
                     )}
-                    {currentLocation && (!identifiedEmployee?.shifts || identifiedEmployee.shifts.length === 0) && (
-                      <p className="text-xs text-slate-500 mt-2">
-                        Nenhum turno cadastrado para este funcionário.
-                      </p>
+                    {currentLocation && availableShifts.length === 0 && (
+                      <div className="text-center p-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-xs">
+                        {(!identifiedEmployee?.shifts || identifiedEmployee.shifts.length === 0)
+                          ? "Nenhum turno cadastrado para este funcionário."
+                          : "Nenhum turno disponível no horário atual."
+                        }
+                      </div>
                     )}
                   </div>
 
