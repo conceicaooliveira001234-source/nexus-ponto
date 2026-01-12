@@ -2773,34 +2773,35 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   {/* Shift Selector (Filtered) */}
                   <div className="w-full max-w-md mb-6">
                     <label className="text-xs font-mono text-cyan-400 uppercase mb-2 block text-left">Turno de Trabalho</label>
-                    <div className="relative">
-                      <select 
-                        value={currentShift?.id || ''} 
-                        onChange={(e) => {
-                          const shift = identifiedEmployee?.shifts?.find(s => s.id === e.target.value);
-                          if (shift) {
+                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                      {identifiedEmployee?.shifts?.map(shift => (
+                        <button
+                          key={shift.id}
+                          onClick={() => {
                             setCurrentShift(shift);
                             showToast(`Turno selecionado: ${shift.name}`, 'success');
-                          }
-                        }}
-                        className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors appearance-none"
-                        disabled={!currentLocation}
-                      >
-                        <option value="" disabled>Selecione um turno...</option>
-                        {identifiedEmployee?.shifts?.map(shift => (
-                          <option key={shift.id} value={shift.id}>
-                            {shift.name || 'Turno sem nome'} ({shift.entryTime || 'N/A'} - {shift.exitTime || 'N/A'})
-                          </option>
-                        ))}
-                      </select>
-                      <Briefcase className="absolute left-3 top-3 w-4 h-4 text-slate-500 pointer-events-none" />
-                      <div className="absolute right-3 top-3 pointer-events-none">
-                        <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                      </div>
+                            playSound.click();
+                          }}
+                          className={`w-full text-left p-3 rounded-lg border transition-all ${
+                            currentShift?.id === shift.id
+                              ? 'bg-cyan-500/20 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]'
+                              : 'bg-slate-950/50 border-slate-700 hover:border-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                          disabled={!currentLocation}
+                        >
+                          <p className="font-bold text-white">{shift.name || 'Turno sem nome'}</p>
+                          <div className="text-xs text-slate-400 grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                            <span><strong className="text-slate-300 font-mono">Entrada:</strong> {shift.entryTime || 'N/A'}</span>
+                            <span><strong className="text-slate-300 font-mono">Saída:</strong> {shift.exitTime || 'N/A'}</span>
+                            <span><strong className="text-slate-300 font-mono">In. Pausa:</strong> {shift.breakTime || 'N/A'}</span>
+                            <span><strong className="text-slate-300 font-mono">Fim Pausa:</strong> {shift.breakEndTime || 'N/A'}</span>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                     {!currentShift && currentLocation && (
                       <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Selecione um turno disponível agora
+                        <AlertCircle className="w-3 h-3" /> Selecione um turno para registrar o ponto.
                       </p>
                     )}
                     {currentLocation && (!identifiedEmployee?.shifts || identifiedEmployee.shifts.length === 0) && (
