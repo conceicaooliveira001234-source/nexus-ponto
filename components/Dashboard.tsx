@@ -14,6 +14,12 @@ import * as faceapi from 'face-api.js';
 import { getCurrentPosition, isWithinRadius, calculateDistance } from '../lib/geolocation';
 import { playSound } from '../lib/sounds';
 
+// Adiciona as definições de tipo para a API de gatilhos de notificação
+interface TimestampTrigger {
+  new(timestamp: number): any;
+}
+declare const TimestampTrigger: TimestampTrigger | undefined;
+
 interface DashboardProps {
   role: UserRole;
   onBack: () => void;
@@ -136,82 +142,93 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }, []);
 
   // -- Notification Logic --
-  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const showReminderNotification = (title: string, body: string) => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(registration => {
-        registration.showNotification(title, {
-          body,
-          icon: '/pwa-192x192.png',
-          badge: '/favicon.ico',
-          vibrate: [200, 100, 200],
-        });
-        playSound.alert();
-      });
-    }
-  };
-
   useEffect(() => {
-    const clearNotificationTimeout = () => {
-      if (notificationTimeoutRef.current) {
-        clearTimeout(notificationTimeoutRef.current);
-        notificationTimeoutRef.current = null;
+    const NOTIFICATION_TAG = 'nexuswork-reminder';
+
+    const scheduleNotification = async () => {
+      // 1. Verifica se temos permissão e um turno selecionado
+      if (notificationPermission !== 'granted' || !currentShift) {
+        return;
+      }
+
+      // 2. Verifica se o navegador suporta as APIs necessárias
+      if (!('serviceWorker' in navigator) || typeof TimestampTrigger === 'undefined') {
+        console.warn('⚠️ Lembretes de ponto em segundo plano não são suportados neste navegador.');
+        return;
+      }
+      
+      const registration = await navigator.serviceWorker.ready;
+
+      // 3. Cancela qualquer notificação agendada anteriormente para evitar duplicatas
+      const notifications = await registration.getNotifications({ tag: NOTIFICATION_TAG });
+      notifications.forEach(notification => notification.close());
+
+      // 4. Calcula o próximo evento de ponto
+      const timeToDate = (timeStr: string | undefined): Date | null => {
+        if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hours, minutes, 0, 0);
+        return date;
+      };
+
+      const schedule = [
+        { type: 'ENTRY', time: timeToDate(currentShift.entryTime), label: 'entrada' },
+        { type: 'BREAK_START', time: timeToDate(currentShift.breakTime), label: 'início da pausa' },
+        { type: 'BREAK_END', time: timeToDate(currentShift.breakEndTime), label: 'fim da pausa' },
+        { type: 'EXIT', time: timeToDate(currentShift.exitTime), label: 'saída' },
+      ];
+      
+      const now = new Date();
+      let nextEvent = null;
+      for (const event of schedule) {
+        const hasHappened = todayAttendance.some(record => record.type === event.type);
+        if (event.time && !hasHappened && event.time > now) {
+          nextEvent = event;
+          break;
+        }
+      }
+
+      // 5. Se houver um próximo evento, agenda a notificação
+      if (nextEvent && nextEvent.time) {
+        const NOTIFICATION_LEAD_TIME_MS = 3 * 60 * 1000;
+        const notificationTime = new Date(nextEvent.time.getTime() - NOTIFICATION_LEAD_TIME_MS);
+
+        if (notificationTime > now) {
+          try {
+            await registration.showNotification('Lembrete de Ponto', {
+              tag: NOTIFICATION_TAG, // Tag para identificar e gerenciar a notificação
+              body: `Faltam 3 minutos para o seu horário de ${nextEvent.label}.`,
+              showTrigger: new TimestampTrigger(notificationTime.getTime()), // Agenda para o futuro
+              icon: '/pwa-192x192.png',
+              badge: '/pwa-192x192.png', // Ícone para a barra de status
+              vibrate: [200, 100, 200],
+              sound: '/sounds/alert.mp3' // Opcional: um som customizado
+            });
+            console.log(`🔔 Notificação agendada para "${nextEvent.label}" às ${notificationTime.toLocaleTimeString('pt-BR')}.`);
+            showToast(`Lembrete ativado para ${nextEvent.label} às ${nextEvent.time.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}`, 'info');
+          } catch (e) {
+            console.error('❌ Erro ao agendar notificação:', e);
+            showToast('Não foi possível agendar o lembrete de ponto.', 'error');
+          }
+        }
       }
     };
 
-    if (notificationPermission !== 'granted' || !currentShift) {
-      clearNotificationTimeout();
-      return;
-    }
+    scheduleNotification();
 
-    const timeToDate = (timeStr: string | undefined): Date | null => {
-      if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const date = new Date();
-      date.setHours(hours, minutes, 0, 0);
-      return date;
+    // Função de limpeza: cancela a notificação se o componente for desmontado
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+          registration.getNotifications({ tag: NOTIFICATION_TAG }).then(notifications => {
+            notifications.forEach(notification => notification.close());
+            console.log('🧹 Lembretes de ponto pendentes foram cancelados.');
+          });
+        });
+      }
     };
-
-    const schedule = [
-      { type: 'ENTRY', time: timeToDate(currentShift.entryTime), label: 'entrada' },
-      { type: 'BREAK_START', time: timeToDate(currentShift.breakTime), label: 'início da pausa' },
-      { type: 'BREAK_END', time: timeToDate(currentShift.breakEndTime), label: 'fim da pausa' },
-      { type: 'EXIT', time: timeToDate(currentShift.exitTime), label: 'saída' },
-    ];
-    
-    const now = new Date();
-    
-    let nextEvent = null;
-    for (const event of schedule) {
-      const hasHappened = todayAttendance.some(record => record.type === event.type);
-      if (event.time && !hasHappened && event.time > now) {
-        nextEvent = event;
-        break;
-      }
-    }
-    
-    clearNotificationTimeout();
-
-    if (nextEvent && nextEvent.time) {
-      const NOTIFICATION_LEAD_TIME_MS = 3 * 60 * 1000;
-      const notificationTime = new Date(nextEvent.time.getTime() - NOTIFICATION_LEAD_TIME_MS);
-
-      if (notificationTime > now) {
-        const delay = notificationTime.getTime() - now.getTime();
-        console.log(`🔔 Agendando notificação para "${nextEvent.label}" em ${Math.round(delay / 1000 / 60)} minutos.`);
-        
-        notificationTimeoutRef.current = setTimeout(() => {
-          showReminderNotification(
-            'Lembrete de Ponto',
-            `Faltam 3 minutos para o seu horário de ${nextEvent.label}.`
-          );
-        }, delay);
-      }
-    }
-
-    return () => clearNotificationTimeout();
-  }, [currentShift, notificationPermission, todayAttendance]);
+  }, [currentShift, notificationPermission, todayAttendance, showToast]);
 
   const handleRequestNotificationPermission = async () => {
     if (!('Notification' in window)) {
