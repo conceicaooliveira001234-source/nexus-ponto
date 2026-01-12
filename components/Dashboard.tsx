@@ -274,6 +274,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     };
   }, [isCompany, currentCompanyId]);
 
+  // Sync identified employee data when the main employee list is updated from Firestore
+  useEffect(() => {
+    if (identifiedEmployee?.id && employees.length > 0) {
+      const updatedData = employees.find(e => e.id === identifiedEmployee.id);
+      
+      // Check if data is found and if shifts are actually different to avoid unnecessary re-renders.
+      if (updatedData && JSON.stringify(updatedData.shifts) !== JSON.stringify(identifiedEmployee.shifts)) {
+        console.log(`🔄 Sincronizando dados para ${identifiedEmployee.name}. Os turnos foram alterados.`);
+        setIdentifiedEmployee(updatedData);
+        showToast('Seus turnos de trabalho foram atualizados!', 'info');
+        playSound.alert();
+      }
+    }
+  }, [employees, identifiedEmployee]);
+
   // -- Camera Lifecycle Effect --
   useEffect(() => {
     let isActive = true;
