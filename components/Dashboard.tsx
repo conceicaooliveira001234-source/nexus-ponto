@@ -2183,19 +2183,32 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         </div>
                         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                            {locEmployees.map(emp => (
-                             <div key={emp.id} className="flex items-center gap-3 bg-slate-950/50 p-3 rounded border border-slate-800">
-                                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-slate-600">
+                            <div key={emp.id} className="flex flex-col gap-3 bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden border border-slate-600 shrink-0">
                                   {emp.photoBase64 ? (
                                     <img src={emp.photoBase64} alt={emp.name} className="w-full h-full object-cover" />
                                   ) : (
                                     <User className="w-6 h-6 m-2 text-slate-500" />
                                   )}
                                 </div>
-                                <div>
-                                  <div className="font-bold text-sm text-white">{emp.name}</div>
-                                  <div className="text-xs text-cyan-500">{emp.role}</div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-sm text-white truncate">{emp.name}</div>
+                                  <div className="text-xs text-cyan-500 truncate">{emp.role}</div>
                                 </div>
-                             </div>
+                              </div>
+                              {!emp.photoBase64 && (
+                                <div className="border-t border-slate-700/50 pt-2 mt-2">
+                                  <button
+                                    onClick={() => handleGenerateLink(emp.id)}
+                                    className="w-full bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold py-2 px-2 rounded-lg hover:bg-amber-600/40 transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <Share2 className="w-3 h-3" />
+                                    Gerar Link Facial
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                            ))}
                         </div>
                       </div>
