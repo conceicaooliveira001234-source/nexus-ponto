@@ -595,39 +595,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
 
-  // Helper to check shift visibility
-  const isShiftVisible = (shift: Shift) => {
-    if (!shift) {
-      return false;
-    }
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    if (!shift.entryTime || !shift.exitTime) {
-      console.warn(`Turno ignorado por falta de horários definidos: ${shift.name || 'Sem nome'} (ID: ${shift.id})`);
-      return false;
-    }
-
-    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
-    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
-    
-    const entryMinutes = entryH * 60 + entryM;
-    const exitMinutes = exitH * 60 + exitM;
-    
-    // Janela de visibilidade: 6 horas antes da entrada até a hora da saída
-    const VISIBILITY_PADDING_BEFORE_MINUTES = 6 * 60;
-    
-    const startWindow = (entryMinutes - VISIBILITY_PADDING_BEFORE_MINUTES + 1440) % 1440;
-    const endWindow = exitMinutes;
-
-    if (startWindow <= endWindow) {
-        // Turno normal (ex: visível de 02:00 até 17:00)
-        return currentMinutes >= startWindow && currentMinutes <= endWindow;
-    } else {
-        // Turno noturno (ex: visível de 16:00 até 06:00 do dia seguinte)
-        return currentMinutes >= startWindow || currentMinutes <= endWindow;
-    }
-  };
 
   // 🔥 Auto-start camera when component mounts (Employee Login)
   useEffect(() => {
@@ -641,21 +608,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [isBiometricVerified, showPinLogin, employeeContext, modelsLoaded]);
 
-  // Auto-select shift if only one is visible or if location changes
+  // Auto-select shift if only one is available, or if location changes
   useEffect(() => {
     if (identifiedEmployee && identifiedEmployee.shifts) {
-      const visibleShifts = identifiedEmployee.shifts.filter(isShiftVisible);
-      if (visibleShifts.length === 1) {
-        setCurrentShift(visibleShifts[0]);
-      } else if (visibleShifts.length === 0) {
+      const availableShifts = identifiedEmployee.shifts || [];
+      if (availableShifts.length === 1) {
+        setCurrentShift(availableShifts[0]);
+      } else if (availableShifts.length === 0) {
         setCurrentShift(null);
       }
-      // If multiple, user must select. If current selection is no longer visible, clear it.
-      if (currentShift && !isShiftVisible(currentShift)) {
+      // If the current shift is no longer in the employee's shift list, clear it.
+      if (currentShift && !availableShifts.some(s => s.id === currentShift.id)) {
         setCurrentShift(null);
       }
     }
-  }, [identifiedEmployee, currentLocation]); // Re-evaluate when location changes (conceptually linked) or employee loads
+  }, [identifiedEmployee, currentLocation]); // Re-evaluate when employee loads or location changes conceptually
 
   // -- Logic for Sequential Attendance Buttons --
   const todayAttendance = useMemo(() => {
@@ -2820,7 +2787,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         disabled={!currentLocation}
                       >
                         <option value="" disabled>Selecione um turno...</option>
-                        {identifiedEmployee?.shifts?.filter(isShiftVisible).map(shift => (
+                        {identifiedEmployee?.shifts?.map(shift => (
                           <option key={shift.id} value={shift.id}>
                             {shift.name || 'Turno sem nome'} ({shift.entryTime || 'N/A'} - {shift.exitTime || 'N/A'})
                           </option>
@@ -2836,9 +2803,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         <AlertCircle className="w-3 h-3" /> Selecione um turno disponível agora
                       </p>
                     )}
-                    {currentLocation && identifiedEmployee?.shifts?.filter(isShiftVisible).length === 0 && (
+                    {currentLocation && (!identifiedEmployee?.shifts || identifiedEmployee.shifts.length === 0) && (
                       <p className="text-xs text-slate-500 mt-2">
-                        Nenhum turno disponível para este horário.
+                        Nenhum turno cadastrado para este funcionário.
                       </p>
                     )}
                   </div>
