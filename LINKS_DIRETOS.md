@@ -27,8 +27,7 @@ service cloud.firestore {
     
     // COMPANIES - Apenas usuários autenticados
     match /companies/{companyId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
     
     // EMPLOYEES - Leitura pública para reconhecimento facial
@@ -53,8 +52,7 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if true;
       allow create: if true;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update, delete: if request.auth != null;
     }
   }
 }
