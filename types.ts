@@ -39,7 +39,7 @@ export interface Employee {
   entryTime: string;
   breakTime: string;
   exitTime: string;
-  locationId: string;
+  locationIds: string[]; // Changed to array for multiple locations
   photoBase64?: string; // Reference photo for facial recognition
   pin?: string;
 }

@@ -57,7 +57,9 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const initialEmployeeState = {
     name: '', cpf: '', role: '', whatsapp: '', 
-    shift: 'Diurno', entryTime: '', breakTime: '', exitTime: '', locationId: '', photoBase64: '', pin: ''
+    shift: '', entryTime: '', breakTime: '', exitTime: '', 
+    locationIds: [] as string[], 
+    photoBase64: '', pin: ''
   };
 
   const [newEmployee, setNewEmployee] = useState(initialEmployeeState);
@@ -236,10 +238,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     const qEmployees = query(employeesRef, where("companyId", "==", currentCompanyId));
 
     const unsubEmployees = onSnapshot(qEmployees, (snapshot) => {
-      const emps: Employee[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Employee));
+      const emps: Employee[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Handle legacy locationId by converting to array
+        const locIds = data.locationIds || (data.locationId ? [data.locationId] : []);
+        return {
+          id: doc.id,
+          ...data,
+          locationIds: locIds
+        } as Employee;
+      });
       setEmployees(emps);
       setIsLoadingData(false);
     });
@@ -618,8 +626,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // ADD or UPDATE Employee
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmployee.name || !newEmployee.locationId) {
-      showToast("Preencha o nome e selecione um local.", "error");
+    if (!newEmployee.name || newEmployee.locationIds.length === 0) {
+      showToast("Preencha o nome e selecione pelo menos um local.", "error");
       return;
     }
     if (isProcessingPhoto) {
@@ -636,19 +644,21 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
     
     try {
+      const shiftDescription = `${newEmployee.entryTime} - ${newEmployee.exitTime}`;
+      const employeeData = {
+        ...newEmployee,
+        shift: shiftDescription,
+        companyId: currentCompanyId
+      };
+
       if (editingEmployeeId) {
         // UPDATE
-        await updateDoc(doc(db, "employees", editingEmployeeId), {
-          ...newEmployee
-        });
+        await updateDoc(doc(db, "employees", editingEmployeeId), employeeData);
         showToast("Funcionário atualizado com sucesso!", "success");
         setEditingEmployeeId(null);
       } else {
         // CREATE
-        await addDoc(collection(db, "employees"), {
-          companyId: currentCompanyId,
-          ...newEmployee
-        });
+        await addDoc(collection(db, "employees"), employeeData);
         showToast("Funcionário cadastrado com sucesso!", "success");
       }
 
@@ -673,7 +683,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       entryTime: emp.entryTime,
       breakTime: emp.breakTime,
       exitTime: emp.exitTime,
-      locationId: emp.locationId,
+      locationIds: emp.locationIds || [],
       photoBase64: emp.photoBase64 || '',
       pin: emp.pin || ''
     });
@@ -920,7 +930,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     try {
       // Find employee by CPF
       const found = employees.find(e => 
-        e.cpf === cpfForLogin && e.locationId === employeeContext?.locationId
+        e.cpf === cpfForLogin && e.locationIds?.includes(employeeContext?.locationId || '')
       );
 
       if (!found) throw new Error("CPF não encontrado neste local.");
@@ -980,7 +990,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log('📊 Confiança da detecção:', detection.detection.score);
 
       // 2. Get Candidates for THIS location
-      const candidates = employees.filter(e => e.locationId === employeeContext.locationId && e.photoBase64);
+      const candidates = employees.filter(e => e.locationIds?.includes(employeeContext.locationId) && e.photoBase64);
 
       console.log(`👥 Encontrados ${candidates.length} funcionários cadastrados neste local`);
 
@@ -1608,7 +1618,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                  </div>
                  {/* Existing Roster Logic ... */}
                  {locations.map(loc => {
-                    const locEmployees = employees.filter(e => e.locationId === loc.id);
+                    const locEmployees = employees.filter(e => e.locationIds?.includes(loc.id));
                     if (locEmployees.length === 0) return null;
                     return (
                       <div key={loc.id} className="border border-slate-700/50 rounded-xl overflow-hidden bg-slate-900/50">
@@ -1859,26 +1869,58 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                            <TechInput label="WhatsApp" value={newEmployee.whatsapp} onChange={e => setNewEmployee({...newEmployee, whatsapp: e.target.value})} />
                            
                            <div className="space-y-2">
-                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Local de Serviço</label>
-                             <div className="relative">
-                               <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
-                               <select value={newEmployee.locationId} onChange={e => setNewEmployee({...newEmployee, locationId: e.target.value})} className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors" required>
-                                 <option value="">Selecione um local...</option>
-                                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                               </select>
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Locais de Acesso</label>
+                             <div className="bg-slate-950/50 border border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
+                               {locations.length === 0 ? (
+                                 <p className="text-slate-500 text-xs">Nenhum local cadastrado.</p>
+                               ) : (
+                                 locations.map(loc => (
+                                   <label key={loc.id} className="flex items-center gap-3 p-2 hover:bg-slate-800/50 rounded cursor-pointer transition-colors">
+                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newEmployee.locationIds.includes(loc.id) ? 'bg-cyan-600 border-cyan-500' : 'border-slate-600 bg-slate-900'}`}>
+                                       {newEmployee.locationIds.includes(loc.id) && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                                     </div>
+                                     <input
+                                       type="checkbox"
+                                       className="hidden"
+                                       checked={newEmployee.locationIds.includes(loc.id)}
+                                       onChange={(e) => {
+                                         if (e.target.checked) {
+                                           setNewEmployee(prev => ({ ...prev, locationIds: [...prev.locationIds, loc.id] }));
+                                         } else {
+                                           setNewEmployee(prev => ({ ...prev, locationIds: prev.locationIds.filter(id => id !== loc.id) }));
+                                         }
+                                       }}
+                                     />
+                                     <span className={`text-sm ${newEmployee.locationIds.includes(loc.id) ? 'text-white' : 'text-slate-400'}`}>{loc.name}</span>
+                                   </label>
+                                 ))
+                               )}
                              </div>
                            </div>
 
                            <div className="space-y-2">
-                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Turno de Trabalho</label>
-                             <div className="relative">
-                               <Clock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
-                               <select value={newEmployee.shift} onChange={e => setNewEmployee({...newEmployee, shift: e.target.value})} className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors">
-                                 <option value="Diurno">Diurno (08:00 - 18:00)</option>
-                                 <option value="Noturno">Noturno (22:00 - 06:00)</option>
-                                 <option value="Comercial">Comercial</option>
-                                 <option value="12x36">Escala 12x36</option>
-                               </select>
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Horários do Turno</label>
+                             <div className="grid grid-cols-3 gap-3">
+                               <TechInput 
+                                 label="Entrada" 
+                                 type="time" 
+                                 value={newEmployee.entryTime} 
+                                 onChange={e => setNewEmployee({...newEmployee, entryTime: e.target.value})} 
+                                 required 
+                               />
+                               <TechInput 
+                                 label="Intervalo" 
+                                 type="time" 
+                                 value={newEmployee.breakTime} 
+                                 onChange={e => setNewEmployee({...newEmployee, breakTime: e.target.value})} 
+                               />
+                               <TechInput 
+                                 label="Saída" 
+                                 type="time" 
+                                 value={newEmployee.exitTime} 
+                                 onChange={e => setNewEmployee({...newEmployee, exitTime: e.target.value})} 
+                                 required 
+                               />
                              </div>
                            </div>
                          </div>
@@ -1929,7 +1971,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                       {/* Employee Grid */}
                       <div className="bg-slate-950/30 p-4 rounded-b-xl min-h-[400px]">
                         {(() => {
-                          const filteredEmployees = employees.filter(e => e.locationId === activeLocationTab);
+                          const filteredEmployees = employees.filter(e => e.locationIds?.includes(activeLocationTab));
                           if (!activeLocationTab) return <div className="text-center text-slate-500 py-10">Selecione um local acima.</div>;
                           if (filteredEmployees.length === 0) return (
                             <div className="flex flex-col items-center justify-center h-full py-20 text-slate-500 opacity-50">
