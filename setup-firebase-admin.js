@@ -41,8 +41,7 @@ service cloud.firestore {
     // COMPANIES - Apenas usuários autenticados podem ler/escrever
     // ═══════════════════════════════════════════════════════════════
     match /companies/{companyId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -85,11 +84,8 @@ service cloud.firestore {
       // CRIAÇÃO: Qualquer pessoa pode criar (para registrar ponto)
       allow create: if true;
       
-      // ATUALIZAÇÃO: Apenas usuários autenticados (admins)
-      allow update: if request.auth != null;
-      
-      // EXCLUSÃO: Apenas usuários autenticados (admins)
-      allow delete: if request.auth != null;
+      // ATUALIZAÇÃO E EXCLUSÃO: Apenas usuários autenticados (admins)
+      allow update, delete: if request.auth != null;
     }
   }
 }`;
