@@ -987,11 +987,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       showToast("Aguarde o processamento da foto.", "info");
       return;
     }
-    if (!newEmployee.photoBase64) {
-      showToast("É obrigatório enviar uma foto para o reconhecimento facial.", "error");
-      playSound.error(); // 🔊 SOM DE ERRO
-      return;
-    }
     if (!newEmployee.pin || newEmployee.pin.length < 4) {
       showToast("Defina um PIN de pelo menos 4 dígitos.", "error");
       playSound.error(); // 🔊 SOM DE ERRO
@@ -1017,8 +1012,14 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         setEditingEmployeeId(null);
       } else {
         // CREATE
-        await addDoc(collection(db, "employees"), employeeData);
-        showToast("Funcionário cadastrado com sucesso!", "success");
+        const docRef = await addDoc(collection(db, "employees"), employeeData);
+        
+        if (employeeData.photoBase64) {
+          showToast("Funcionário cadastrado com sucesso!", "success");
+        } else {
+          showToast("Funcionário salvo! Use o link abaixo para o cadastro facial.", "info");
+          handleGenerateLink(docRef.id);
+        }
       }
 
       setNewEmployee(initialEmployeeState);
@@ -2276,7 +2277,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                 
                                 {!newEmployee.photoBase64 && (
                                   <p className="mt-3 text-xs text-slate-500 text-center max-w-xs">
-                                    O funcionário deve estar presente para o cadastro facial
+                                    O funcionário pode cadastrar o rosto agora ou você pode gerar um link de cadastro após salvar.
                                   </p>
                                 )}
                                 
