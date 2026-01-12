@@ -46,27 +46,30 @@ service cloud.firestore {
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // EMPLOYEES - Apenas usuários autenticados podem ler/escrever
+    // EMPLOYEES - Leitura pública para reconhecimento facial
     // ═══════════════════════════════════════════════════════════════
     match /employees/{employeeId} {
-      allow read: if request.auth != null;
+      // Leitura pública é necessária para que o sistema possa comparar
+      // o rosto do usuário com os funcionários cadastrados.
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // LOCATIONS - Apenas usuários autenticados podem ler/escrever
+    // LOCATIONS - Leitura pública para seleção de local pelo funcionário
     // ═══════════════════════════════════════════════════════════════
     match /locations/{locationId} {
-      allow read: if request.auth != null;
+      // Leitura pública é necessária para que o funcionário possa
+      // ver e selecionar seu local de trabalho no painel.
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
     // ═══════════════════════════════════════════════════════════════
-    // USERS - Apenas usuários autenticados podem ler/escrever
+    // USERS - Apenas o próprio usuário pode ler/escrever seus dados
     // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // ═══════════════════════════════════════════════════════════════

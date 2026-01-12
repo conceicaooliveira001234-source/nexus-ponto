@@ -31,22 +31,21 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
-    // EMPLOYEES - Apenas usuários autenticados
+    // EMPLOYEES - Leitura pública para reconhecimento facial
     match /employees/{employeeId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
-    // LOCATIONS - Apenas usuários autenticados
+    // LOCATIONS - Leitura pública para seleção de local
     match /locations/{locationId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if request.auth != null;
     }
     
-    // USERS - Apenas usuários autenticados
+    // USERS - Apenas o próprio usuário pode ler/escrever seus dados
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // ATTENDANCE - ACESSO PÚBLICO PARA CRIAR REGISTROS
