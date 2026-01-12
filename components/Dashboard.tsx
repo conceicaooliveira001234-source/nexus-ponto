@@ -595,6 +595,68 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   }, [activeEmployeeTab, historyStartDate, historyEndDate, identifiedEmployee]);
 
+  // Helper to check shift visibility
+  const isShiftVisible = (shift: Shift) => {
+    if (!shift) {
+      return false;
+    }
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    if (!shift.entryTime || !shift.exitTime) {
+      console.warn(`Turno ignorado por falta de horários definidos: ${shift.name || 'Sem nome'} (ID: ${shift.id})`);
+      return false;
+    }
+
+    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
+    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
+    
+    const entryMinutes = entryH * 60 + entryM;
+    const exitMinutes = exitH * 60 + exitM;
+    
+    // Janela de visibilidade: 6 horas antes da entrada até a hora da saída
+    const VISIBILITY_PADDING_BEFORE_MINUTES = 6 * 60;
+    
+    const startWindow = (entryMinutes - VISIBILITY_PADDING_BEFORE_MINUTES + 1440) % 1440;
+    const endWindow = exitMinutes;
+
+    if (startWindow <= endWindow) {
+        // Turno normal (ex: visível de 02:00 até 17:00)
+        return currentMinutes >= startWindow && currentMinutes <= endWindow;
+    } else {
+        // Turno noturno (ex: visível de 16:00 até 06:00 do dia seguinte)
+        return currentMinutes >= startWindow || currentMinutes <= endWindow;
+    }
+  };
+
+  // 🔥 Auto-start camera when component mounts (Employee Login)
+  useEffect(() => {
+    if (!isBiometricVerified && !showPinLogin && employeeContext && modelsLoaded) {
+      console.log('🚀 Auto-iniciando câmera para login automático...');
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 500); // Small delay to ensure UI is ready
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isBiometricVerified, showPinLogin, employeeContext, modelsLoaded]);
+
+  // Auto-select shift if only one is visible or if location changes
+  useEffect(() => {
+    if (identifiedEmployee && identifiedEmployee.shifts) {
+      const visibleShifts = identifiedEmployee.shifts.filter(isShiftVisible);
+      if (visibleShifts.length === 1) {
+        setCurrentShift(visibleShifts[0]);
+      } else if (visibleShifts.length === 0) {
+        setCurrentShift(null);
+      }
+      // If multiple, user must select. If current selection is no longer visible, clear it.
+      if (currentShift && !isShiftVisible(currentShift)) {
+        setCurrentShift(null);
+      }
+    }
+  }, [identifiedEmployee, currentLocation]); // Re-evaluate when location changes (conceptually linked) or employee loads
+
   // -- Handlers --
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -2372,18 +2434,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }
 
   // -- RENDER: EMPLOYEE DASHBOARD (Biometric Lock) --
-  
-  // 🔥 Auto-start camera when component mounts (Employee Login)
-  useEffect(() => {
-    if (!isBiometricVerified && !showPinLogin && employeeContext && modelsLoaded) {
-      console.log('🚀 Auto-iniciando câmera para login automático...');
-      const timer = setTimeout(() => {
-        startCamera();
-      }, 500); // Small delay to ensure UI is ready
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isBiometricVerified, showPinLogin, employeeContext, modelsLoaded]);
 
   if (!isBiometricVerified) {
     return (
@@ -2543,56 +2593,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   }
 
   // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
-
-  // Helper to check shift visibility
-  const isShiftVisible = (shift: Shift) => {
-    if (!shift) {
-      return false;
-    }
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    if (!shift.entryTime || !shift.exitTime) {
-      console.warn(`Turno ignorado por falta de horários definidos: ${shift.name || 'Sem nome'} (ID: ${shift.id})`);
-      return false;
-    }
-
-    const [entryH, entryM] = shift.entryTime.split(':').map(Number);
-    const [exitH, exitM] = shift.exitTime.split(':').map(Number);
-    
-    const entryMinutes = entryH * 60 + entryM;
-    const exitMinutes = exitH * 60 + exitM;
-    
-    // Janela de visibilidade: 6 horas antes da entrada até a hora da saída
-    const VISIBILITY_PADDING_BEFORE_MINUTES = 6 * 60;
-    
-    const startWindow = (entryMinutes - VISIBILITY_PADDING_BEFORE_MINUTES + 1440) % 1440;
-    const endWindow = exitMinutes;
-
-    if (startWindow <= endWindow) {
-        // Turno normal (ex: visível de 02:00 até 17:00)
-        return currentMinutes >= startWindow && currentMinutes <= endWindow;
-    } else {
-        // Turno noturno (ex: visível de 16:00 até 06:00 do dia seguinte)
-        return currentMinutes >= startWindow || currentMinutes <= endWindow;
-    }
-  };
-
-  // Auto-select shift if only one is visible or if location changes
-  useEffect(() => {
-    if (identifiedEmployee && identifiedEmployee.shifts) {
-      const visibleShifts = identifiedEmployee.shifts.filter(isShiftVisible);
-      if (visibleShifts.length === 1) {
-        setCurrentShift(visibleShifts[0]);
-      } else if (visibleShifts.length === 0) {
-        setCurrentShift(null);
-      }
-      // If multiple, user must select. If current selection is no longer visible, clear it.
-      if (currentShift && !isShiftVisible(currentShift)) {
-        setCurrentShift(null);
-      }
-    }
-  }, [identifiedEmployee, currentLocation]); // Re-evaluate when location changes (conceptually linked) or employee loads
 
   return (
     <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center pb-24">
