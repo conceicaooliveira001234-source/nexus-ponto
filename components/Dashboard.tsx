@@ -3053,8 +3053,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-lg p-3 pl-10 outline-none focus:border-cyan-500 transition-colors appearance-none"
                       >
                         <option value="" disabled>Selecione um local...</option>
-                        {locations.map(loc => (
-                          <option key={loc.id} value={loc.id}>{loc.name}</option>
+                        {locations
+                          .filter(loc => identifiedEmployee?.locationIds?.includes(loc.id))
+                          .map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
                         ))}
                       </select>
                       <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-500 pointer-events-none" />
