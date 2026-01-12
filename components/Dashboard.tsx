@@ -99,7 +99,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [isRegisteringAttendance, setIsRegisteringAttendance] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<ServiceLocation | null>(null);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null); // Turno selecionado
-  const [isIdentityConfirmed, setIsIdentityConfirmed] = useState(false);
   
   // -- Attendance History States --
   const [activeEmployeeTab, setActiveEmployeeTab] = useState<EmployeeViewTab>('DASHBOARD');
@@ -1596,7 +1595,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setShowAttendanceFlow(true);
     setLocationVerified(false);
     setIsCheckingLocation(true);
-    setIsIdentityConfirmed(false); // Reset identity confirmation
 
     try {
       // Step 1: Verificar localização
@@ -1981,56 +1979,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setCurrentPosition(null);
     setIsCheckingLocation(false);
     setScanMessage('');
+    setIsScanning(false);
     stopCamera();
     playSound.click(); // 🔊 SOM DE CLIQUE
     // NÃO resetar isBiometricVerified nem identifiedEmployee - o usuário continua logado
-  };
-
-  // 🔥 NOVO: Função de validação contínua para habilitar botão
-  const verifyIdentityForAttendance = async () => {
-    if (!videoRef.current || !canvasRef.current || !identifiedEmployee || !modelsLoaded) return;
-    
-    // Não setar isScanning aqui para não piscar UI, usar apenas para feedback de mensagem se necessário
-    
-    try {
-      const videoEl = videoRef.current;
-      
-      const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
-
-      if (!detection) {
-        setScanMessage('👤 Posicione seu rosto...');
-        setIsIdentityConfirmed(false);
-        return;
-      }
-
-      if (!identifiedEmployee.photoBase64) {
-         setScanMessage('❌ Erro: Foto de referência ausente');
-         return;
-      }
-
-      const img = await loadImage(identifiedEmployee.photoBase64);
-      const referenceDetection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-
-      if (!referenceDetection) {
-         // Se não conseguir ler a foto de referência, não dá pra validar
-         return;
-      }
-
-      const distance = faceapi.euclideanDistance(detection.descriptor, referenceDetection.descriptor);
-      const SECURITY_THRESHOLD = 0.55;
-
-      if (distance > SECURITY_THRESHOLD) {
-        setScanMessage('⚠️ Rosto não corresponde');
-        setIsIdentityConfirmed(false);
-      } else {
-        setScanMessage('✅ Identidade Confirmada');
-        setIsIdentityConfirmed(true);
-      }
-
-    } catch (err) {
-      console.error(err);
-      setIsIdentityConfirmed(false);
-    }
   };
 
   // 🔥 NOVO: Função de reconhecimento e registro automático
@@ -2075,18 +2027,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       console.log(`📊 Distância euclidiana: ${distance.toFixed(4)} (threshold: ${SECURITY_THRESHOLD})`);
 
       if (distance > SECURITY_THRESHOLD) {
-        // ❌ NÃO é a mesma pessoa
+        // ❌ NÃO é a mesma pessoa - ERRO DE SEGURANÇA
         setScanMessage('⚠️ Rosto não corresponde');
-        // Opcional: alertar usuário
         showToast('❌ ERRO DE SEGURANÇA: O rosto detectado não corresponde ao funcionário logado.', "error");
         playSound.error(); // 🔊 SOM DE ERRO
-        setIsScanning(false);
+        cancelAttendanceFlow(); // Cancela todo o fluxo
         return;
       }
 
       // ✅ É a mesma pessoa - Registrar ponto
       setScanMessage('✅ Identidade confirmada! Registrando...');
-      setIsIdentityConfirmed(true);
       
       // Pequeno delay para feedback visual antes de registrar
       setTimeout(async () => {
@@ -3281,39 +3231,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                            🔐 <strong>Validação de Segurança</strong>
                          </p>
                          <p className="text-slate-400 text-xs">
-                           O sistema irá verificar se você é o funcionário logado ({identifiedEmployee?.name}) para habilitar o registro
+                           O sistema irá verificar se você é o funcionário logado ({identifiedEmployee?.name}) e registrar o ponto automaticamente.
                          </p>
                        </div>
                      </div>
-
-                     {/* Botão de Confirmação Manual */}
-                     <button
-                       onClick={registerAttendance}
-                       disabled={!isIdentityConfirmed || isRegisteringAttendance}
-                       className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
-                         isIdentityConfirmed 
-                           ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] cursor-pointer' 
-                           : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                       }`}
-                     >
-                       {isRegisteringAttendance ? (
-                         <><Loader2 className="w-5 h-5 animate-spin" /> Registrando...</>
-                       ) : isIdentityConfirmed ? (
-                         <><CheckCircle className="w-5 h-5" /> CONFIRMAR PONTO</>
-                       ) : (
-                         <><ScanFace className="w-5 h-5" /> Aguardando Identificação...</>
-                       )}
-                     </button>
-
-                     {/* Apenas botão Cancelar */}
-                     <button
-                       onClick={cancelAttendanceFlow}
-                       disabled={isRegisteringAttendance}
-                       className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                     >
-                       <X className="w-5 h-5" />
-                       {isRegisteringAttendance ? 'Aguarde...' : 'Cancelar Registro'}
-                     </button>
+                     <p className="text-center text-xs text-slate-500">
+                       Para cancelar, clique no 'X' no topo do modal.
+                     </p>
                    </div>
                  </div>
                )}
