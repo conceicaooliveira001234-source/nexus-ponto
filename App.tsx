@@ -206,11 +206,6 @@ const App: React.FC = () => {
         return (
           <FacialOnboarding
             employeeId={employeeIdForOnboarding!}
-            onComplete={() => {
-              window.history.pushState({}, '', '/');
-              setView('LANDING');
-              alert('Cadastro facial concluído com sucesso! Você já pode fechar esta página.');
-            }}
           />
         );
       

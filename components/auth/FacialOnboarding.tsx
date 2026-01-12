@@ -9,10 +9,9 @@ import { playSound } from '../../lib/sounds';
 
 interface FacialOnboardingProps {
   employeeId: string;
-  onComplete: () => void;
 }
 
-const FacialOnboarding: React.FC<FacialOnboardingProps> = ({ employeeId, onComplete }) => {
+const FacialOnboarding: React.FC<FacialOnboardingProps> = ({ employeeId }) => {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -20,6 +19,7 @@ const FacialOnboarding: React.FC<FacialOnboardingProps> = ({ employeeId, onCompl
   const [cameraActive, setCameraActive] = useState(false);
   const [faceDetected, setFaceDetected] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -133,7 +133,7 @@ const FacialOnboarding: React.FC<FacialOnboardingProps> = ({ employeeId, onCompl
 
       playSound.success();
       stopCamera();
-      onComplete();
+      setIsComplete(true);
 
     } catch (err) {
       setError('Erro ao salvar o cadastro facial. Tente novamente.');
@@ -156,7 +156,16 @@ const FacialOnboarding: React.FC<FacialOnboardingProps> = ({ employeeId, onCompl
       <TechBackground />
       <div className="relative z-30 w-full max-w-md">
         <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 p-8 rounded-2xl shadow-[0_0_50px_-10px_rgba(217,70,239,0.2)]">
-          {error ? (
+          {isComplete ? (
+            <div className="text-center">
+              <div className="w-24 h-24 bg-green-500/10 rounded-full mx-auto mb-6 flex items-center justify-center border border-green-500/30">
+                <CheckCircle className="w-12 h-12 text-green-400" />
+              </div>
+              <h2 className="font-tech text-2xl font-bold text-white">Cadastro Concluído!</h2>
+              <p className="text-slate-400 text-sm mt-2">Seu cadastro facial foi realizado com sucesso.</p>
+              <p className="text-slate-500 text-xs mt-8">Você já pode fechar esta página.</p>
+            </div>
+          ) : error ? (
             <div className="text-center text-red-400">
               <h2 className="font-tech text-2xl font-bold mb-4">Erro no Cadastro</h2>
               <p>{error}</p>
