@@ -5,7 +5,6 @@ import CompanyLogin from './components/auth/CompanyLogin';
 import CompanyRegister from './components/auth/CompanyRegister';
 import EmployeeLogin from './components/auth/EmployeeLogin';
 import FacialOnboarding from './components/auth/FacialOnboarding';
-import PwaInstallPrompt from './components/PwaInstallPrompt';
 import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation } from './types';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -17,41 +16,6 @@ const App: React.FC = () => {
   const [employeeContext, setEmployeeContext] = useState<EmployeeContext | null>(null);
   const [employeeIdForOnboarding, setEmployeeIdForOnboarding] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // PWA Install State
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
-  const [promptDismissed, setPromptDismissed] = useState(sessionStorage.getItem('pwa_prompt_dismissed') === 'true');
-
-  // PWA Install Listeners
-  useEffect(() => {
-    // Detect if the app is installed
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-    const checkPwaInstalled = () => {
-      const isInstalled = mediaQuery.matches || (window.navigator as any).standalone === true;
-      setIsPwaInstalled(isInstalled);
-      if (isInstalled) {
-        console.log('✅ App is running in standalone mode (installed).');
-      }
-    };
-    
-    checkPwaInstalled();
-    const handleChange = () => checkPwaInstalled();
-    mediaQuery.addEventListener('change', handleChange);
-
-    // Listen for the install prompt
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      console.log('👍 `beforeinstallprompt` event triggered.');
-      setInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -194,27 +158,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePwaInstall = () => {
-    if (!installPrompt) return;
-    const promptEvent = installPrompt as any;
-    promptEvent.prompt();
-    promptEvent.userChoice.then((choiceResult: { outcome: string }) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
-      setInstallPrompt(null);
-      setPromptDismissed(true);
-      sessionStorage.setItem('pwa_prompt_dismissed', 'true');
-    });
-  };
-
-  const handlePwaDismiss = () => {
-    setPromptDismissed(true);
-    sessionStorage.setItem('pwa_prompt_dismissed', 'true');
-  };
-
   // Navigation handlers
   const handleLogout = async () => {
     try {
@@ -295,8 +238,6 @@ const App: React.FC = () => {
             onBack={handleLogout} 
             currentCompanyId={employeeContext?.companyId}
             employeeContext={employeeContext}
-            isPwaInstalled={isPwaInstalled}
-            installPrompt={installPrompt}
             onSetLocation={handleSetEmployeeLocation}
           />
         );
@@ -309,13 +250,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen w-full text-slate-100 overflow-hidden relative selection:bg-cyan-500/30">
       {renderView()}
-      {installPrompt && !isPwaInstalled && !promptDismissed && (
-        <PwaInstallPrompt 
-          installPrompt={installPrompt}
-          onInstall={handlePwaInstall}
-          onDismiss={handlePwaDismiss}
-        />
-      )}
     </div>
   );
 };

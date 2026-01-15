@@ -3,8 +3,9 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Download, Bell, BellOff
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff
 } from 'lucide-react';
+import InstallButton from './InstallButton';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
 import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
@@ -25,8 +26,6 @@ interface DashboardProps {
   onBack: () => void;
   currentCompanyId?: string;
   employeeContext?: EmployeeContext | null;
-  isPwaInstalled?: boolean;
-  installPrompt?: Event | null;
   onSetLocation?: (location: ServiceLocation | null) => void;
 }
 
@@ -34,7 +33,7 @@ type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
-const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, isPwaInstalled, installPrompt, onSetLocation }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, onSetLocation }) => {
   const isCompany = role === UserRole.COMPANY;
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
   
@@ -130,7 +129,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [generatedLink, setGeneratedLink] = useState('');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [deletionTarget, setDeletionTarget] = useState<{ id: string; name: string } | null>(null);
-  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('Notification' in window ? Notification.permission : 'denied');
   const [showNotificationHelp, setShowNotificationHelp] = useState(false);
 
@@ -3045,21 +3043,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                </div>
             </div>
             <div className="flex items-center gap-2">
-              {!isPwaInstalled && !installPrompt && (
-                <button 
-                  onClick={() => {
-                    setShowInstallHelp(true);
-                    playSound.click();
-                  }}
-                  title="Como instalar o aplicativo?"
-                  className="p-3 bg-slate-700 rounded-full hover:bg-slate-600 text-white self-end md:self-auto"
-                >
-                  <Info className="w-5 h-5" />
-                </button>
-              )}
               <button onClick={handleDashboardLogout} title="Desconectar" className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-300 self-end md:self-auto"><ArrowLeft className="w-5 h-5" /></button>
             </div>
          </div>
+
+         <InstallButton />
 
          {activeEmployeeTab === 'DASHBOARD' && notificationPermission === 'default' && (
            <div className="bg-slate-800/50 border border-fuchsia-500/30 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in">
@@ -3515,53 +3503,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
            </div>
          )}
          
-         {/* PWA Install Help Modal */}
-         {showInstallHelp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(8,145,178,0.2)] relative">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
-                  <Download className="w-6 h-6 text-cyan-400"/>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-1">Como Instalar o Aplicativo</h2>
-                  <p className="text-slate-400 text-sm">Siga os passos manuais para a melhor experiência:</p>
-                </div>
-              </div>
-              
-              <div className="my-6 space-y-4 text-slate-300 text-sm">
-                <div className="bg-slate-800/50 p-4 rounded-lg">
-                  <p className="font-bold text-cyan-400 mb-1">No Celular (Chrome ou Safari):</p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Toque no menu do navegador (normalmente <span className="font-bold">⋮</span> ou um ícone de <span className="font-bold">Compartilhar</span>).</li>
-                    <li>Procure e selecione a opção <span className="font-bold">"Instalar aplicativo"</span> ou <span className="font-bold">"Adicionar à Tela de Início"</span>.</li>
-                    <li>Confirme a instalação.</li>
-                  </ol>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg">
-                  <p className="font-bold text-cyan-400 mb-1">No Computador (Chrome ou Edge):</p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Clique no ícone de menu (<span className="font-bold">⋮</span>) no canto superior direito.</li>
-                    <li>Vá em <span className="font-bold">"Instalar [NexusWork Portal]"</span> ou procure por um ícone de instalação na barra de endereço.</li>
-                    <li>Confirme a instalação.</li>
-                  </ol>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button 
-                  onClick={() => {
-                    setShowInstallHelp(false);
-                    playSound.click();
-                  }}
-                  className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
-                >
-                  Entendi
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Notification Help Modal */}
         {showNotificationHelp && (
