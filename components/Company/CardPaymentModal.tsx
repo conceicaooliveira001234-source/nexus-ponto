@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { getPublicKey, processCardPayment } from '../../lib/mercadopago';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
@@ -14,21 +14,28 @@ interface CardPaymentModalProps {
 const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail, onClose, onPaymentSuccess }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false); // For payment submission
-  const [readyToRenderBrick, setReadyToRenderBrick] = useState(false);
+  const [isReady, setIsReady] = useState(false); // Controls when the Brick is rendered
+  const initialized = useRef(false);
 
   useEffect(() => {
+    // This guard prevents the effect from running twice in StrictMode, which would cause an error.
+    if (initialized.current) {
+      return;
+    }
+    initialized.current = true;
+
     let isMounted = true;
     const initializeMP = async () => {
       try {
         const publicKey = await getPublicKey();
         if (isMounted && publicKey) {
           initMercadoPago(publicKey, { locale: 'pt-BR' });
-          // Delay rendering to ensure the container is in the DOM
+          // Safety delay to ensure the modal's container is stable in the DOM
           setTimeout(() => {
             if (isMounted) {
-              setReadyToRenderBrick(true);
+              setIsReady(true);
             }
-          }, 500);
+          }, 1000);
         } else if (isMounted) {
           throw new Error('Chave pública do Mercado Pago não foi encontrada.');
         }
@@ -41,12 +48,12 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
     initializeMP();
 
     return () => { isMounted = false; };
-  }, []);
-  
+  }, []); // Empty dependency array ensures this runs only once on mount
+
   const initialization = {
     amount: Number(amount),
     payer: {
-      email: payerEmail || 'cliente@nexuswork.com.br',
+      email: payerEmail || 'cliente@email.com',
       entity_type: 'individual',
       first_name: 'Cliente',
       last_name: 'Nexus',
@@ -74,7 +81,6 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         playSound.success();
         onPaymentSuccess();
       } else {
-        // This will be caught by the catch block below
         throw new Error(`Pagamento ${response.status}. Motivo: ${response.status_detail}`);
       }
     } catch (err: any) {
@@ -82,22 +88,24 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
       setError(err.message || 'Ocorreu um erro ao processar seu pagamento. Verifique os dados e tente novamente.');
       playSound.error();
       setIsLoading(false);
-      // Rejecting the promise allows the Brick to handle the error state
-      return Promise.reject();
+      return Promise.reject(); // Important to let the Brick know the submission failed
     }
   };
 
   const onError = (err: any) => {
     console.error('🚨 Payment Brick onError callback:', err);
-    // Do not close the modal or set disruptive state here.
-    // Let onSubmit handle user-facing errors after a submission attempt.
+    // Avoid setting state here that causes re-renders to prevent loops.
+    // User-facing errors are handled in onSubmit.
   };
-  
+
   const onReady = () => { /* Payment Brick is ready */ };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="bg-slate-900 border border-fuchsia-500/30 rounded-2xl p-8 max-w-lg w-full shadow-lg relative animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in" onClick={onClose}>
+      <div 
+        className="bg-slate-900 border border-fuchsia-500/30 rounded-2xl p-8 max-w-lg w-full shadow-lg relative animate-in fade-in zoom-in-95"
+        onClick={(e) => e.stopPropagation()} // Prevent modal from closing when clicking inside
+      >
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-white">Pagamento com Cartão de Crédito</h2>
           <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X /></button>
@@ -117,20 +125,22 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
            </div>
         )}
         
-        {!readyToRenderBrick ? (
-          <div className="flex flex-col items-center justify-center h-48">
-            <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
-            <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
-          </div>
-        ) : (
-          <Payment
-            initialization={initialization}
-            customization={customization}
-            onSubmit={onSubmit}
-            onError={onError}
-            onReady={onReady}
-          />
-        )}
+        <div className="min-h-[400px]"> {/* Stable container to prevent layout shift */}
+          {!isReady ? (
+            <div className="flex flex-col items-center justify-center h-full pt-16">
+              <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
+              <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
+            </div>
+          ) : (
+            <Payment
+              initialization={initialization}
+              customization={customization}
+              onSubmit={onSubmit}
+              onError={onError}
+              onReady={onReady}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
