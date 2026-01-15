@@ -14,8 +14,7 @@ interface CardPaymentModalProps {
 const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail, onClose, onPaymentSuccess }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false); // For payment submission
-  const [isSdkLoading, setIsSdkLoading] = useState(true); // For SDK key fetching
-  const [isReady, setIsReady] = useState(false); // For Brick rendering
+  const [readyToRenderBrick, setReadyToRenderBrick] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -24,14 +23,18 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         const publicKey = await getPublicKey();
         if (isMounted && publicKey) {
           initMercadoPago(publicKey, { locale: 'pt-BR' });
-          setIsSdkLoading(false);
+          // Delay rendering to ensure the container is in the DOM
+          setTimeout(() => {
+            if (isMounted) {
+              setReadyToRenderBrick(true);
+            }
+          }, 500);
         } else if (isMounted) {
           throw new Error('Chave pública do Mercado Pago não foi encontrada.');
         }
       } catch (err: any) {
         if (isMounted) {
           setError(err.message || 'Erro ao carregar o gateway de pagamento.');
-          setIsSdkLoading(false);
         }
       }
     };
@@ -43,8 +46,10 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
   const initialization = {
     amount: Number(amount),
     payer: {
-      email: payerEmail,
+      email: payerEmail || 'cliente@nexuswork.com.br',
       entity_type: 'individual',
+      first_name: 'Cliente',
+      last_name: 'Nexus',
     },
   };
 
@@ -69,6 +74,7 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         playSound.success();
         onPaymentSuccess();
       } else {
+        // This will be caught by the catch block below
         throw new Error(`Pagamento ${response.status}. Motivo: ${response.status_detail}`);
       }
     } catch (err: any) {
@@ -76,18 +82,18 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
       setError(err.message || 'Ocorreu um erro ao processar seu pagamento. Verifique os dados e tente novamente.');
       playSound.error();
       setIsLoading(false);
+      // Rejecting the promise allows the Brick to handle the error state
       return Promise.reject();
     }
   };
 
   const onError = (err: any) => {
     console.error('🚨 Payment Brick onError callback:', err);
-    setError('Ocorreu um erro inesperado ao carregar o formulário de pagamento. Verifique o console para mais detalhes.');
+    // Do not close the modal or set disruptive state here.
+    // Let onSubmit handle user-facing errors after a submission attempt.
   };
   
-  const onReady = () => {
-    setIsReady(true);
-  };
+  const onReady = () => { /* Payment Brick is ready */ };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
@@ -111,30 +117,19 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
            </div>
         )}
         
-        {isSdkLoading && (
+        {!readyToRenderBrick ? (
           <div className="flex flex-col items-center justify-center h-48">
             <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
-            <p className="mt-4 text-slate-400">A inicializar gateway de pagamento...</p>
+            <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
           </div>
-        )}
-        {!isSdkLoading && !error && (
-          <>
-            {!isReady && (
-              <div className="flex flex-col items-center justify-center h-48">
-                <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
-                <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
-              </div>
-            )}
-            <div style={{ display: isReady ? 'block' : 'none' }}>
-              <Payment
-                initialization={initialization}
-                customization={customization}
-                onSubmit={onSubmit}
-                onError={onError}
-                onReady={onReady}
-              />
-            </div>
-          </>
+        ) : (
+          <Payment
+            initialization={initialization}
+            customization={customization}
+            onSubmit={onSubmit}
+            onError={onError}
+            onReady={onReady}
+          />
         )}
       </div>
     </div>
