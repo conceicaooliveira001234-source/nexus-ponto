@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData, SystemSettings } from '../../types';
-import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2 } from 'lucide-react';
 import TechBackground from '../TechBackground';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
@@ -17,6 +17,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
   const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({});
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
 
   useEffect(() => {
     // Listener for all companies
@@ -59,6 +60,46 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
     } catch (error) {
       console.error('Error updating company:', error);
       alert('Erro ao atualizar empresa.');
+    }
+  };
+
+  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    if (!window.confirm(`ATENÇÃO: Isso apagará a empresa "${companyName}" e TODOS os seus funcionários, locais, turnos e registros de ponto permanentemente. Tem certeza?`)) {
+      return;
+    }
+
+    setIsDeleting(companyId);
+    try {
+      const batch = writeBatch(db);
+
+      // Collections to cascade delete from
+      const collectionsToDelete = ['employees', 'locations', 'shifts', 'attendance'];
+      
+      for (const collectionName of collectionsToDelete) {
+        const q = query(collection(db, collectionName), where('companyId', '==', companyId));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        console.log(`[CASCADE DELETE] ${snapshot.size} documents from '${collectionName}' will be deleted for company ${companyId}.`);
+      }
+
+      // Delete the company document itself
+      const companyRef = doc(db, 'companies', companyId);
+      batch.delete(companyRef);
+
+      // Commit all deletions at once
+      await batch.commit();
+
+      alert(`Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.`);
+      playSound.success();
+      
+    } catch (error) {
+      console.error('Error performing cascade delete:', error);
+      alert('Erro ao excluir a empresa e seus dados.');
+      playSound.error();
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -113,7 +154,18 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                           <td className="px-6 py-4">{company.planExpiresAt ? new Date(company.planExpiresAt).toLocaleDateString('pt-BR') : 'N/A'}</td>
                           <td className={`px-6 py-4 font-bold ${status === 'Ativo' ? 'text-green-400' : 'text-red-400'}`}>{status}</td>
                           <td className="px-6 py-4 text-right">
-                            <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline">Editar</button>
+                            {isDeleting === company.uid ? (
+                              <div className="flex justify-end">
+                                <Loader2 className="w-5 h-5 animate-spin text-red-400" />
+                              </div>
+                            ) : (
+                              <div className="flex justify-end items-center gap-2">
+                                <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline">Editar</button>
+                                <button onClick={() => handleDeleteCompany(company.uid!, company.companyName)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
