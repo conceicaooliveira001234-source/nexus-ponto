@@ -234,7 +234,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                         </button>
                         <button 
                           type="button" 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault();
                             setPaymentSettings(settingsBeforeEdit);
                             setIsEditingSettings(false);
                           }} 
@@ -246,7 +247,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                     ) : (
                       <button 
                         type="button" 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
                           setSettingsBeforeEdit(paymentSettings);
                           setIsEditingSettings(true);
                         }} 
