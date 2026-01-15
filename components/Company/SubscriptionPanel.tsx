@@ -103,6 +103,11 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
     });
   };
 
+  const handleCardPayment = async () => {
+    alert('Integração de cartão em breve via API');
+    playSound.click();
+  };
+
   if (paymentStatus === 'approved') {
     return (
       <div className="text-center p-8 bg-green-900/20 border border-green-500/30 rounded-xl animate-in fade-in zoom-in-95">
@@ -218,14 +223,25 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
             <span className="font-bold text-cyan-400">{(numEmployees * PRICE_PER_EMPLOYEE).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </div>
         </div>
-        <button 
-          onClick={handleGeneratePix} 
-          disabled={isLoading}
-          className="w-full mt-6 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
-        >
-          {isLoading ? <Loader2 className="animate-spin" /> : <QrCode />}
-          Pagar com PIX
-        </button>
+        {paymentMethod === 'pix' ? (
+          <button 
+            onClick={handleGeneratePix} 
+            disabled={isLoading}
+            className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : <QrCode />}
+            Pagar com PIX
+          </button>
+        ) : (
+          <button 
+            onClick={handleCardPayment} 
+            disabled={isLoading}
+            className="w-full mt-6 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : <CreditCard />}
+            Pagar com Cartão
+          </button>
+        )}
         {error && <p className="text-red-400 text-xs mt-2 text-center">{error}</p>}
       </div>
     </div>

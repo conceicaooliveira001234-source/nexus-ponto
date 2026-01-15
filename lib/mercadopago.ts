@@ -46,11 +46,14 @@ export async function processPixPayment(
     },
   };
 
+  const idempotencyKey = crypto.randomUUID();
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
+      'X-Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(body),
   });
