@@ -2,17 +2,31 @@ import { db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { SystemSettings } from '../types';
 
-// Função para buscar o Access Token do Firestore de forma segura
-async function getAccessToken(): Promise<string> {
+// Função para buscar as configurações de pagamento do Firestore
+export async function getPaymentSettings(): Promise<SystemSettings> {
   const settingsDoc = await getDoc(doc(db, 'system_settings', 'payment_config'));
   if (!settingsDoc.exists()) {
     throw new Error('Configurações de pagamento não encontradas.');
   }
-  const settings = settingsDoc.data() as SystemSettings;
+  return settingsDoc.data() as SystemSettings;
+}
+
+// Função para buscar apenas o Access Token
+async function getAccessToken(): Promise<string> {
+  const settings = await getPaymentSettings();
   if (!settings.mercadoPagoAccessToken) {
     throw new Error('Access Token do Mercado Pago não configurado pelo administrador.');
   }
   return settings.mercadoPagoAccessToken;
+}
+
+// Função para buscar apenas a Public Key (para o frontend)
+export async function getPublicKey(): Promise<string> {
+  const settings = await getPaymentSettings();
+  if (!settings.mercadoPagoPublicKey) {
+    throw new Error('Public Key do Mercado Pago não configurada pelo administrador.');
+  }
+  return settings.mercadoPagoPublicKey;
 }
 
 interface PixPaymentResponse {

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
-import { processCardPayment } from '../../lib/mercadopago';
+import { getPublicKey, processCardPayment } from '../../lib/mercadopago';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
 import { playSound } from '../../lib/sounds';
 
@@ -11,15 +11,33 @@ interface CardPaymentModalProps {
   onPaymentSuccess: () => void;
 }
 
-// Inicializa o Mercado Pago com a chave pública.
-// TODO: Carregar esta chave das configurações do sistema (system_settings)
-initMercadoPago('APP_USR-769f05e6-54b4-4b70-a53f-c549bacc26c9', {
-  locale: 'pt-BR'
-});
-
 const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail, onClose, onPaymentSuccess }) => {
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For payment submission
+  const [isSdkLoading, setIsSdkLoading] = useState(true); // For SDK initialization
+
+  useEffect(() => {
+    let isMounted = true;
+    const initializeMP = async () => {
+      try {
+        const publicKey = await getPublicKey();
+        if (isMounted && publicKey) {
+          initMercadoPago(publicKey, { locale: 'pt-BR' });
+          setIsSdkLoading(false);
+        } else if (isMounted) {
+          throw new Error('Chave pública do Mercado Pago não foi encontrada.');
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setError(err.message || 'Erro ao carregar o gateway de pagamento.');
+          setIsSdkLoading(false);
+        }
+      }
+    };
+    initializeMP();
+
+    return () => { isMounted = false; };
+  }, []);
   
   const initialization = {
     amount: amount,
@@ -77,12 +95,19 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
            </div>
         )}
         
-        <Payment
-          initialization={initialization}
-          onSubmit={onSubmit}
-          onError={onError}
-          onReady={onReady}
-        />
+        {isSdkLoading ? (
+          <div className="flex flex-col items-center justify-center h-48">
+            <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
+            <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
+          </div>
+        ) : !error && (
+          <Payment
+            initialization={initialization}
+            onSubmit={onSubmit}
+            onError={onError}
+            onReady={onReady}
+          />
+        )}
       </div>
     </div>
   );
