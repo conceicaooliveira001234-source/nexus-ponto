@@ -18,30 +18,29 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
   const initialized = useRef(false);
 
   useEffect(() => {
+    // Trava de seguranca contra StrictMode
     if (initialized.current) return;
     initialized.current = true;
 
     let isMounted = true;
     const initializeMP = async () => {
       try {
-        console.log('Buscando Public Key...');
         const publicKey = await getPublicKey();
         
         if (!isMounted) return;
 
         if (publicKey) {
-          console.log('Public Key encontrada. Inicializando SDK...');
           initMercadoPago(publicKey, { locale: 'pt-BR' });
           
-          // Delay de seguranca para evitar erro de container
+          // Delay de 1 segundo para estabilizar o modal antes de carregar o Brick
           setTimeout(() => {
             if (isMounted) setIsReady(true);
           }, 1000);
         } else {
-          setError('Erro: Chave Publica nao configurada no Painel Admin.');
+          setError('Erro: Chave Publica nao encontrada no sistema.');
         }
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Erro ao inicializar pagamento.');
+        if (isMounted) setError(err.message || 'Erro ao inicializar.');
       }
     };
     initializeMP();
@@ -75,11 +74,11 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         playSound.success();
         onPaymentSuccess();
       } else {
-        throw new Error(`Pagamento nao aprovado: ${response.status_detail}`);
+        throw new Error(`Pagamento nao aprovado. Status: ${response.status}`);
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Erro ao processar pagamento.');
+      setError('Nao foi possivel processar o pagamento. Verifique os dados.');
       playSound.error();
       setIsLoading(false);
       return Promise.reject();
@@ -87,11 +86,11 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
   };
 
   const onError = (err: any) => {
-    console.error('Erro no Brick:', err);
+    console.error('Erro no componente Brick:', err);
   };
 
   const onReady = () => {
-    console.log('Brick pronto.');
+    console.log('Formulario carregado com sucesso.');
   };
 
   return (
@@ -104,7 +103,7 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
           <X />
         </button>
         
-        <h2 className="text-xl font-bold text-white mb-6">Pagamento Seguro</h2>
+        <h2 className="text-xl font-bold text-white mb-6">Cartao de Credito</h2>
 
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-500 text-red-200 rounded text-sm flex gap-2 items-center">
@@ -120,11 +119,11 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
           </div>
         )}
 
-        <div className="min-h-[450px] flex flex-col justify-center">
+        <div className="min-h-[500px] flex flex-col justify-center">
           {!isReady ? (
             <div className="flex flex-col items-center text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin mb-2" />
-              <p>Carregando gateway...</p>
+              <p>Carregando formulario seguro...</p>
             </div>
           ) : (
             <Payment
