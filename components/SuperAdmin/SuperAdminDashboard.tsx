@@ -14,7 +14,10 @@ interface SuperAdminDashboardProps {
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<'COMPANIES' | 'SETTINGS'>('COMPANIES');
   const [companies, setCompanies] = useState<CompanyData[]>([]);
-  const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({});
+  const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({
+    mercadoPagoPublicKey: '',
+    mercadoPagoAccessToken: '',
+  });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
@@ -32,6 +35,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
     const unsubSettings = onSnapshot(settingsDocRef, (docSnap) => {
       if (docSnap.exists()) {
         setPaymentSettings(docSnap.data() as SystemSettings);
+      } else {
+        // Pre-fill with production keys if no settings are saved yet
+        setPaymentSettings({
+          mercadoPagoPublicKey: 'APP_USR-769f05e6-54b4-4b70-a53f-c549bacc26c9',
+          mercadoPagoAccessToken: 'APP_USR-644747811168820-120414-9564cb414f00db246d8422f0f18741d7-511791611'
+        });
       }
     });
 

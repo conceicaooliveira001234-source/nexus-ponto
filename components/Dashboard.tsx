@@ -3,10 +3,11 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User, FileBadge,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff, CreditCard
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
+import Checkout from './Billing/Checkout';
 import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
 import { db } from '../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore';
@@ -28,7 +29,7 @@ interface DashboardProps {
   onSetLocation?: (location: ServiceLocation | null) => void;
 }
 
-type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'SETTINGS';
+type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'BILLING' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
@@ -2320,6 +2321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             {renderSidebarItem('LOCATIONS', 'Geolocalização', <Globe className="w-4 h-4" />)}
             {renderSidebarItem('EMPLOYEES', 'Funcionários', <Users className="w-4 h-4" />)}
             {renderSidebarItem('SHIFTS', 'Turnos', <Clock className="w-4 h-4" />)}
+            {renderSidebarItem('BILLING', 'Financeiro', <CreditCard className="w-4 h-4" />)}
             {renderSidebarItem('SETTINGS', 'Configurações', <Settings className="w-4 h-4" />)}
           </nav>
 
@@ -2354,6 +2356,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             <button onClick={() => setActiveTab('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
             <button onClick={() => setActiveTab('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
             <button onClick={() => setActiveTab('SHIFTS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SHIFTS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Turnos</button>
+            <button onClick={() => setActiveTab('BILLING')} className={`px-4 py-2 rounded text-xs ${activeTab === 'BILLING' ? 'bg-cyan-600' : 'text-slate-400'}`}>Financ.</button>
             <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
           </div>
 
@@ -2904,6 +2907,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                   ))}
                 </div>
               </div>
+            )}
+
+            {activeTab === 'BILLING' && (
+              <Checkout />
             )}
 
             {activeTab === 'SETTINGS' && (
