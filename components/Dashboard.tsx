@@ -28,7 +28,7 @@ interface DashboardProps {
   onSetLocation?: (location: ServiceLocation | null) => void;
 }
 
-type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SETTINGS';
+type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
@@ -42,6 +42,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [companyName, setCompanyName] = useState('NEXUS ADMIN'); // Default placeholder
   const [locations, setLocations] = useState<ServiceLocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   // -- Settings State --
@@ -63,6 +64,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     longitude: string;
     radius: string;
   }>({ name: '', address: '', latitude: '', longitude: '', radius: '100' });
+  
+  const initialShiftState = { name: '', entryTime: '', breakTime: '', breakEndTime: '', exitTime: '' };
+  const [newShift, setNewShift] = useState(initialShiftState);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
@@ -417,6 +422,17 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     const employeesRef = collection(db, "employees");
     const qEmployees = query(employeesRef, where("companyId", "==", currentCompanyId));
 
+    // 3. Listen for Shifts
+    const shiftsRef = collection(db, "shifts");
+    const qShifts = query(shiftsRef, where("companyId", "==", currentCompanyId));
+    const unsubShifts = onSnapshot(qShifts, (snapshot) => {
+      const companyShifts: Shift[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Shift));
+      setShifts(companyShifts);
+    });
+
     const unsubEmployees = onSnapshot(qEmployees, (snapshot) => {
       const emps: Employee[] = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -447,6 +463,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     return () => {
       unsubLocations();
       unsubEmployees();
+      unsubShifts();
     };
   }, [isCompany, currentCompanyId]);
 
@@ -1140,6 +1157,54 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   };
 
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newShift.name || !newShift.entryTime || !newShift.exitTime) {
+      showToast("Nome, Entrada e Saída são obrigatórios.", "error");
+      return;
+    }
+    try {
+      if (editingShiftId) {
+        await updateDoc(doc(db, "shifts", editingShiftId), newShift);
+        showToast("Turno atualizado com sucesso!", "success");
+      } else {
+        await addDoc(collection(db, "shifts"), {
+          ...newShift,
+          companyId: currentCompanyId
+        });
+        showToast("Turno criado com sucesso!", "success");
+      }
+      setNewShift(initialShiftState);
+      setEditingShiftId(null);
+      playSound.success();
+    } catch (error) {
+      console.error("Error saving shift:", error);
+      showToast("Erro ao salvar turno.", "error");
+    }
+  };
+
+  const handleEditShift = (shift: Shift) => {
+    setEditingShiftId(shift.id);
+    setNewShift({
+      name: shift.name,
+      entryTime: shift.entryTime,
+      breakTime: shift.breakTime || '',
+      breakEndTime: shift.breakEndTime || '',
+      exitTime: shift.exitTime
+    });
+  };
+
+  const handleDeleteShift = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "shifts", id));
+      showToast("Turno deletado.", "success");
+      playSound.click();
+    } catch (error) {
+      console.error("Error deleting shift:", error);
+      showToast("Erro ao deletar turno.", "error");
+    }
+  };
+
   // ADD or UPDATE Employee
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1257,37 +1322,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     }
   };
 
-  const handleAddShift = () => {
-    setNewEmployee(prev => ({
-      ...prev,
-      shifts: [
-        ...prev.shifts,
-        {
-          id: Date.now().toString(),
-          name: '',
-          entryTime: '',
-          breakTime: '',
-          breakEndTime: '',
-          exitTime: ''
-        }
-      ]
-    }));
-  };
-
-  const handleRemoveShift = (index: number) => {
-    setNewEmployee(prev => ({
-      ...prev,
-      shifts: prev.shifts.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleShiftChange = (index: number, field: keyof Shift, value: string) => {
-    setNewEmployee(prev => {
-      const updatedShifts = [...prev.shifts];
-      updatedShifts[index] = { ...updatedShifts[index], [field]: value };
-      return { ...prev, shifts: updatedShifts };
-    });
-  };
 
   const maskCPF = (value: string) => {
     return value
@@ -2253,6 +2287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             {renderSidebarItem('OVERVIEW', 'Visão Geral', <LayoutDashboard className="w-4 h-4" />)}
             {renderSidebarItem('LOCATIONS', 'Geolocalização', <Globe className="w-4 h-4" />)}
             {renderSidebarItem('EMPLOYEES', 'Funcionários', <Users className="w-4 h-4" />)}
+            {renderSidebarItem('SHIFTS', 'Turnos', <Clock className="w-4 h-4" />)}
             {renderSidebarItem('SETTINGS', 'Configurações', <Settings className="w-4 h-4" />)}
           </nav>
 
@@ -2286,6 +2321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             <button onClick={() => setActiveTab('OVERVIEW')} className={`px-4 py-2 rounded text-xs ${activeTab === 'OVERVIEW' ? 'bg-cyan-600' : 'text-slate-400'}`}>Visão</button>
             <button onClick={() => setActiveTab('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
             <button onClick={() => setActiveTab('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
+            <button onClick={() => setActiveTab('SHIFTS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SHIFTS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Turnos</button>
             <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
           </div>
 
@@ -2606,70 +2642,32 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                            </div>
 
                            <div className="space-y-2">
-                             <div className="flex justify-between items-center">
-                               <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Turnos de Trabalho</label>
-                               <button 
-                                 type="button" 
-                                 onClick={handleAddShift}
-                                 className="text-xs flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors"
-                               >
-                                 <Plus className="w-3 h-3" /> Adicionar Turno
-                               </button>
-                             </div>
-                             
-                             <div className="space-y-3">
-                               {newEmployee.shifts.length === 0 ? (
-                                 <div className="text-center p-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-xs">
-                                   Nenhum turno adicionado. Clique em "Adicionar Turno".
-                                 </div>
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Turnos de Trabalho</label>
+                             <div className="bg-slate-950/50 border border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
+                               {shifts.length === 0 ? (
+                                 <p className="text-slate-500 text-xs">Nenhum turno cadastrado. Vá para a aba 'Turnos' para criar.</p>
                                ) : (
-                                 newEmployee.shifts.map((shift, index) => (
-                                   <div key={shift.id} className="bg-slate-950/50 border border-slate-700 rounded-lg p-3 relative group">
-                                     <button 
-                                       type="button"
-                                       onClick={() => handleRemoveShift(index)}
-                                       className="absolute top-2 right-2 text-slate-600 hover:text-red-400 transition-colors"
-                                     >
-                                       <X className="w-3 h-3" />
-                                     </button>
-                                     
-                                     <div className="grid grid-cols-1 gap-2 mb-2">
-                                       <TechInput 
-                                         label="Nome do Turno" 
-                                         placeholder="Ex: Manhã, Tarde, 12x36"
-                                         value={shift.name} 
-                                         onChange={e => handleShiftChange(index, 'name', e.target.value)} 
-                                         className="mb-1"
-                                       />
+                                 shifts.map(shift => (
+                                   <label key={shift.id} className="flex items-center gap-3 p-2 hover:bg-slate-800/50 rounded cursor-pointer transition-colors">
+                                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${newEmployee.shifts.some(s => s.id === shift.id) ? 'bg-cyan-600 border-cyan-500' : 'border-slate-600 bg-slate-900'}`}>
+                                       {newEmployee.shifts.some(s => s.id === shift.id) && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                                      </div>
-                                     
-                                     <div className="grid grid-cols-4 gap-2">
-                                       <TechInput 
-                                         label="Entrada" 
-                                         type="time" 
-                                         value={shift.entryTime} 
-                                         onChange={e => handleShiftChange(index, 'entryTime', e.target.value)} 
-                                       />
-                                       <TechInput 
-                                         label="Início Pausa" 
-                                         type="time" 
-                                         value={shift.breakTime || ''} 
-                                         onChange={e => handleShiftChange(index, 'breakTime', e.target.value)} 
-                                       />
-                                       <TechInput 
-                                         label="Fim Pausa" 
-                                         type="time" 
-                                         value={shift.breakEndTime || ''} 
-                                         onChange={e => handleShiftChange(index, 'breakEndTime', e.target.value)} 
-                                       />
-                                       <TechInput 
-                                         label="Saída" 
-                                         type="time" 
-                                         value={shift.exitTime} 
-                                         onChange={e => handleShiftChange(index, 'exitTime', e.target.value)} 
-                                       />
-                                     </div>
-                                   </div>
+                                     <input
+                                       type="checkbox"
+                                       className="hidden"
+                                       checked={newEmployee.shifts.some(s => s.id === shift.id)}
+                                       onChange={(e) => {
+                                         const fullShift = shifts.find(s => s.id === shift.id);
+                                         if (!fullShift) return;
+                                         if (e.target.checked) {
+                                           setNewEmployee(prev => ({ ...prev, shifts: [...prev.shifts, fullShift] }));
+                                         } else {
+                                           setNewEmployee(prev => ({ ...prev, shifts: prev.shifts.filter(s => s.id !== shift.id) }));
+                                         }
+                                       }}
+                                     />
+                                     <span className={`text-sm ${newEmployee.shifts.some(s => s.id === shift.id) ? 'text-white' : 'text-slate-400'}`}>{shift.name} ({shift.entryTime} - {shift.exitTime})</span>
+                                   </label>
                                  ))
                                )}
                              </div>
@@ -2798,6 +2796,49 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               </div>
             )}
             
+            {activeTab === 'SHIFTS' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 bg-slate-900/40 border border-slate-700 rounded-xl p-6 h-fit">
+                  <h3 className="font-tech text-lg text-white mb-4 flex items-center gap-2">
+                    <Clock className="text-cyan-400 w-5 h-5" /> {editingShiftId ? 'Editar Turno' : 'Novo Turno'}
+                  </h3>
+                  <form onSubmit={handleSaveShift} className="space-y-4">
+                    <TechInput label="Nome do Turno" placeholder="Ex: Manhã" value={newShift.name} onChange={e => setNewShift({...newShift, name: e.target.value})} required />
+                    <div className="grid grid-cols-2 gap-2">
+                        <TechInput label="Entrada" type="time" value={newShift.entryTime} onChange={e => setNewShift({...newShift, entryTime: e.target.value})} required />
+                        <TechInput label="Saída" type="time" value={newShift.exitTime} onChange={e => setNewShift({...newShift, exitTime: e.target.value})} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <TechInput label="Início Pausa" type="time" value={newShift.breakTime} onChange={e => setNewShift({...newShift, breakTime: e.target.value})} />
+                        <TechInput label="Fim Pausa" type="time" value={newShift.breakEndTime} onChange={e => setNewShift({...newShift, breakEndTime: e.target.value})} />
+                    </div>
+                    <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-2 rounded-lg font-bold text-sm">SALVAR TURNO</button>
+                    {editingShiftId && (
+                      <button type="button" onClick={() => { setEditingShiftId(null); setNewShift(initialShiftState); }} className="w-full text-center text-xs text-slate-400 mt-2">Cancelar edição</button>
+                    )}
+                  </form>
+                </div>
+                <div className="lg:col-span-2 space-y-4">
+                  <h3 className="font-tech text-white">Turnos Cadastrados</h3>
+                  {shifts.map(shift => (
+                    <div key={shift.id} className="bg-slate-950/40 border border-slate-800 p-4 rounded-lg group relative overflow-hidden">
+                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-500"></div>
+                       <div className="pl-3">
+                         <div className="font-bold text-white">{shift.name}</div>
+                         <div className="text-xs text-slate-400 font-mono">
+                           Entrada: {shift.entryTime} | Saída: {shift.exitTime} | Pausa: {shift.breakTime || '--:--'} - {shift.breakEndTime || '--:--'}
+                         </div>
+                       </div>
+                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button onClick={() => handleEditShift(shift)} className="p-2 text-slate-500 hover:text-cyan-400"><Edit3 className="w-4 h-4"/></button>
+                         <button onClick={() => handleDeleteShift(shift.id)} className="p-2 text-slate-500 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>
+                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {activeTab === 'SETTINGS' && (
               <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-6">
                 <h3 className="font-tech text-white mb-4">Configurações</h3>

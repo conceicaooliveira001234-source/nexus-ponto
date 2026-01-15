@@ -30,6 +30,7 @@ export interface ServiceLocation {
 
 export interface Shift {
   id: string;
+  companyId?: string;
   name: string; // Ex: "Manhã", "Tarde", "Segunda-Sexta"
   entryTime: string;
   breakTime?: string;
