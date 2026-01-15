@@ -16,35 +16,20 @@ export default defineConfig(({ mode }) => {
         basicSsl(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'masked-icon.svg'],
+          includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
           manifest: {
-            name: 'NexusWork Portal',
+            name: 'NexusWork Ponto',
             short_name: 'NexusWork',
-            description: 'Portal de ponto com reconhecimento facial.',
-            theme_color: '#0891b2',
-            background_color: '#020617',
+            description: 'Sistema de Ponto Eletrônico e Gestão',
+            theme_color: '#ffffff',
+            background_color: '#ffffff',
             display: 'standalone',
-            scope: '/',
+            orientation: 'portrait',
             start_url: '/',
             icons: [
-              {
-                src: '/pwa-192x192.png',
-                sizes: '192x192',
-                type: 'image/png',
-                purpose: 'any'
-              },
-              {
-                src: '/pwa-512x512.png',
-                sizes: '512x512',
-                type: 'image/png',
-                purpose: 'any'
-              },
-              {
-                src: '/pwa-512x512.png',
-                sizes: '512x512',
-                type: 'image/png',
-                purpose: 'maskable'
-              }
+              { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+              { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+              { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
             ]
           },
           workbox: {

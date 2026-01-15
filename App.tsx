@@ -9,6 +9,7 @@ import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation } fr
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import InstallButton from './components/InstallButton';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LANDING');
@@ -250,6 +251,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen w-full text-slate-100 overflow-hidden relative selection:bg-cyan-500/30">
       {renderView()}
+      <InstallButton />
     </div>
   );
 };

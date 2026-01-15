@@ -5,7 +5,6 @@ import {
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
   AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff
 } from 'lucide-react';
-import InstallButton from './InstallButton';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
 import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
