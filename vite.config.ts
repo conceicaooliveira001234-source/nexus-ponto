@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3001,
         host: '0.0.0.0',
+        proxy: {
+          '/api/mp': {
+            target: 'https://api.mercadopago.com',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api\/mp/, ''),
+          },
+        },
       },
       plugins: [
         react(), 

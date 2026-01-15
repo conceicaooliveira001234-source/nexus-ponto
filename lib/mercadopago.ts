@@ -31,7 +31,7 @@ export async function processPixPayment(
   description: string
 ): Promise<PixPaymentResponse> {
   const accessToken = await getAccessToken();
-  const url = 'https://api.mercadopago.com/v1/payments';
+  const url = '/api/mp/v1/payments';
 
   const body = {
     transaction_amount: amount,
@@ -74,7 +74,7 @@ export async function processPixPayment(
  */
 export async function checkPaymentStatus(paymentId: number): Promise<string> {
   const accessToken = await getAccessToken();
-  const url = `https://api.mercadopago.com/v1/payments/${paymentId}`;
+  const url = `/api/mp/v1/payments/${paymentId}`;
 
   const response = await fetch(url, {
     method: 'GET',
