@@ -34,6 +34,8 @@ type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
 const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, onSetLocation }) => {
   const isCompany = role === UserRole.COMPANY;
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [showSyncMessage, setShowSyncMessage] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
   
   // -- State for Company Management --
@@ -137,6 +139,23 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setTimeout(() => {
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowSyncMessage(true);
+      setTimeout(() => setShowSyncMessage(false), 3000);
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // -- Restore selected location from context --
@@ -2245,6 +2264,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         </aside>
 
         <main className="relative z-30 flex-1 h-screen overflow-y-auto overflow-x-hidden">
+          {!isOnline && (
+            <div className="sticky top-0 w-full p-2 bg-amber-600/90 backdrop-blur border-b-2 border-amber-400 text-white text-center text-xs font-bold z-50">
+              ⚠ Você está offline. Os dados serão sincronizados quando a conexão voltar.
+            </div>
+          )}
+          {showSyncMessage && isOnline && (
+            <div className="sticky top-0 w-full p-2 bg-green-600/90 backdrop-blur border-b-2 border-green-400 text-white text-center text-xs font-bold z-50">
+              ⚡ Conexão reestabelecida. Sincronizando...
+            </div>
+          )}
           {/* Mobile Header */}
           <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
              <h2 className="font-tech text-lg text-white truncate">{companyName.toUpperCase()}</h2>
@@ -3023,9 +3052,19 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- RENDER: UNLOCKED EMPLOYEE DASHBOARD --
 
   return (
-    <div className="relative min-h-screen p-4 md:p-6 flex flex-col items-center pb-24">
+    <div className="relative min-h-screen flex flex-col items-center">
       <TechBackground />
-      <div className="relative z-30 w-full max-w-4xl">
+      {!isOnline && (
+        <div className="w-full p-2 bg-amber-600/90 backdrop-blur border-b-2 border-amber-400 text-white text-center text-xs font-bold z-50 sticky top-0">
+          ⚠ Você está offline. Seus registros serão salvos e sincronizados quando a conexão voltar.
+        </div>
+      )}
+      {showSyncMessage && isOnline && (
+        <div className="w-full p-2 bg-green-600/90 backdrop-blur border-b-2 border-green-400 text-white text-center text-xs font-bold z-50 sticky top-0">
+          ⚡ Conexão reestabelecida. Sincronizando...
+        </div>
+      )}
+      <div className="relative z-30 w-full max-w-4xl p-4 md:p-6 pb-24">
          {/* Header */}
          <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-10 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl backdrop-blur gap-4">
             <div className="flex items-center gap-4 w-full md:w-auto">
