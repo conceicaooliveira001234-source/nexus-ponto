@@ -14,7 +14,8 @@ interface CardPaymentModalProps {
 const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail, onClose, onPaymentSuccess }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false); // For payment submission
-  const [isSdkLoading, setIsSdkLoading] = useState(true); // For SDK initialization
+  const [isSdkLoading, setIsSdkLoading] = useState(true); // For SDK key fetching
+  const [isReady, setIsReady] = useState(false); // For Brick rendering
 
   useEffect(() => {
     let isMounted = true;
@@ -40,10 +41,23 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
   }, []);
   
   const initialization = {
-    amount: amount,
+    amount: Number(amount),
     payer: {
       email: payerEmail,
+      entity_type: 'individual',
     },
+  };
+
+  const customization = {
+    visual: {
+      style: {
+        theme: 'dark' as const,
+      }
+    },
+    paymentMethods: {
+      creditCard: 'all' as const,
+      debitCard: 'all' as const,
+    }
   };
 
   const onSubmit = async (formData: any) => {
@@ -61,17 +75,19 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
       console.error("Card payment error:", err);
       setError(err.message || 'Ocorreu um erro ao processar seu pagamento. Verifique os dados e tente novamente.');
       playSound.error();
-    } finally {
       setIsLoading(false);
+      return Promise.reject();
     }
   };
 
   const onError = (err: any) => {
-    console.error('Payment Brick error:', err);
-    setError('Erro ao carregar o formulário de pagamento. Tente novamente.');
+    console.error('🚨 Payment Brick onError callback:', err);
+    setError('Ocorreu um erro inesperado ao carregar o formulário de pagamento. Verifique o console para mais detalhes.');
   };
   
-  const onReady = () => { /* Payment Brick is ready */ };
+  const onReady = () => {
+    setIsReady(true);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
@@ -95,18 +111,30 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
            </div>
         )}
         
-        {isSdkLoading ? (
+        {isSdkLoading && (
           <div className="flex flex-col items-center justify-center h-48">
             <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
-            <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
+            <p className="mt-4 text-slate-400">A inicializar gateway de pagamento...</p>
           </div>
-        ) : !error && (
-          <Payment
-            initialization={initialization}
-            onSubmit={onSubmit}
-            onError={onError}
-            onReady={onReady}
-          />
+        )}
+        {!isSdkLoading && !error && (
+          <>
+            {!isReady && (
+              <div className="flex flex-col items-center justify-center h-48">
+                <Loader2 className="w-8 h-8 animate-spin text-fuchsia-400" />
+                <p className="mt-4 text-slate-400">A carregar formulário de pagamento...</p>
+              </div>
+            )}
+            <div style={{ display: isReady ? 'block' : 'none' }}>
+              <Payment
+                initialization={initialization}
+                customization={customization}
+                onSubmit={onSubmit}
+                onError={onError}
+                onReady={onReady}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
