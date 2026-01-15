@@ -3046,8 +3046,6 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             </div>
          </div>
 
-         <InstallButton />
-
          {activeEmployeeTab === 'DASHBOARD' && notificationPermission === 'default' && (
            <div className="bg-slate-800/50 border border-fuchsia-500/30 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in">
              <div className="flex items-center gap-3 text-left w-full">
