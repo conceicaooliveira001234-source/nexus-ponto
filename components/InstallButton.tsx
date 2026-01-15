@@ -16,8 +16,18 @@ const InstallButton: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const dismissed = localStorage.getItem('install_dismissed') === 'true';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+
+    if (dismissed || isStandalone) {
+      return; // Não mostra o botão se já foi dispensado ou se o app já está instalado.
+    }
+
+    setIsVisible(true);
+
     // Detecta se o dispositivo é iOS para mostrar as instruções corretas
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     setIsIOS(isIOSDevice);
@@ -49,21 +59,34 @@ const InstallButton: React.FC = () => {
     }
   };
 
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  const handleDismiss = () => {
+    playSound.click();
+    setIsVisible(false);
+    localStorage.setItem('install_dismissed', 'true');
+  };
 
-  if (isStandalone) {
+  if (!isVisible) {
     return null;
   }
 
   return (
     <>
-      <button
-        onClick={handleInstallClick}
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm rounded-full shadow-[0_0_20px_rgba(8,145,178,0.5)] transition-all transform hover:scale-105"
-        title="Instalar o aplicativo NexusWork Ponto"
-      >
-        <span role="img" aria-label="phone">📲</span> Instalar App
-      </button>
+      <div className="fixed bottom-4 right-4 z-50 flex items-start gap-2">
+        <button
+          onClick={handleInstallClick}
+          className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm rounded-full shadow-[0_0_20px_rgba(8,145,178,0.5)] transition-all transform hover:scale-105 animate-in fade-in zoom-in-95"
+          title="Instalar o aplicativo NexusWork Ponto"
+        >
+          <span role="img" aria-label="phone">📲</span> Instalar App
+        </button>
+        <button
+          onClick={handleDismiss}
+          className="p-1.5 bg-slate-800/80 backdrop-blur-sm rounded-full text-slate-400 hover:text-white hover:bg-red-500/80 transition-all shadow-lg animate-in fade-in zoom-in-95"
+          title="Fechar e não mostrar novamente"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
       
       {showInstructions && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
