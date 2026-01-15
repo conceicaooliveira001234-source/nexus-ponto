@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
-  Users, Settings, Plus, Save, Trash2, FileText, User,
+  Users, Settings, Plus, Save, Trash2, FileText, User, FileBadge,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
   AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff
 } from 'lucide-react';
@@ -31,6 +31,14 @@ interface DashboardProps {
 type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
+
+const formatWorkDays = (days: number[] | undefined) => {
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  if (!days || days.length === 0) return 'Nenhuma escala';
+  if (days.length === 7) return 'Todos os dias';
+  if (JSON.stringify(days) === JSON.stringify([1, 2, 3, 4, 5])) return 'Segunda a Sexta';
+  return days.map(d => dayNames[d]).join(', ');
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, onSetLocation }) => {
   const isCompany = role === UserRole.COMPANY;
@@ -75,6 +83,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     name: '', cpf: '', role: '', whatsapp: '', 
     shifts: [] as Shift[], 
     locationIds: [] as string[], 
+    workDays: [1, 2, 3, 4, 5],
     photoBase64: '', pin: ''
   };
 
@@ -192,13 +201,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     return attendanceRecords.filter(record => record.timestamp >= todayStart);
   }, [attendanceRecords]);
 
+  const isDayOff = useMemo(() => {
+    if (!identifiedEmployee) return false;
+    const today = currentTime.getDay();
+    // Padrão de Seg-Sex se 'workDays' não estiver definido, garantindo retrocompatibilidade.
+    const workDays = identifiedEmployee.workDays || [1, 2, 3, 4, 5];
+    return !workDays.includes(today);
+  }, [identifiedEmployee, currentTime]);
+
   // -- Notification Logic --
   useEffect(() => {
     const NOTIFICATION_TAG = 'nexuswork-reminder';
 
     const scheduleNotification = async () => {
-      // 1. Verifica se temos permissão e um turno selecionado
-      if (notificationPermission !== 'granted' || !currentShift) {
+      // 1. Verifica se temos permissão, um turno selecionado, e se não é dia de folga
+      if (notificationPermission !== 'granted' || !currentShift || isDayOff) {
+        if(isDayOff) console.log('😴 Dia de folga, notificações de ponto desativadas.');
         return;
       }
 
@@ -276,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         });
       }
     };
-  }, [currentShift, notificationPermission, todayAttendance, showToast]);
+  }, [currentShift, notificationPermission, todayAttendance, showToast, isDayOff]);
 
   const handleRequestNotificationPermission = async () => {
     if (!('Notification' in window)) {
@@ -453,7 +471,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           id: doc.id,
           ...data,
           locationIds: locIds,
-          shifts: shifts
+          shifts: shifts,
+          workDays: data.workDays || [1, 2, 3, 4, 5],
         } as Employee;
       });
       setEmployees(emps);
@@ -1272,6 +1291,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       whatsapp: emp.whatsapp,
       shifts: emp.shifts || [],
       locationIds: emp.locationIds || [],
+      workDays: emp.workDays || [1, 2, 3, 4, 5],
       photoBase64: emp.photoBase64 || '',
       pin: emp.pin || ''
     });
@@ -1283,6 +1303,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     setEditingEmployeeId(null);
     setNewEmployee(initialEmployeeState);
     playSound.click(); // 🔊 SOM DE CLIQUE
+  };
+
+  const handleWorkDayToggle = (dayIndex: number) => {
+    setNewEmployee(prev => {
+      const workDays = prev.workDays || [];
+      const newWorkDays = workDays.includes(dayIndex)
+        ? workDays.filter(d => d !== dayIndex)
+        : [...workDays, dayIndex];
+      return { ...prev, workDays: newWorkDays.sort((a, b) => a - b) };
+    });
   };
 
   const confirmDeleteEmployee = (employee: Employee) => {
@@ -2610,6 +2640,26 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                          <div className="space-y-4">
                            <TechInput label="WhatsApp" value={newEmployee.whatsapp} onChange={e => setNewEmployee({...newEmployee, whatsapp: e.target.value})} />
+
+                           <div className="space-y-2">
+                             <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Escala de Trabalho</label>
+                             <div className="flex justify-around items-center bg-slate-950/50 border border-slate-700 rounded-lg p-2 gap-1">
+                               {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => (
+                                 <button
+                                   type="button"
+                                   key={index}
+                                   onClick={() => handleWorkDayToggle(index)}
+                                   className={`w-9 h-9 md:w-10 md:h-10 rounded-full font-bold text-sm transition-all ${
+                                     (newEmployee.workDays || []).includes(index)
+                                       ? 'bg-cyan-600 text-white'
+                                       : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                   }`}
+                                 >
+                                   {day}
+                                 </button>
+                               ))}
+                             </div>
+                           </div>
                            
                            <div className="space-y-2">
                              <label className="text-xs font-mono text-cyan-400 uppercase ml-1">Locais de Acesso</label>
@@ -2776,14 +2826,20 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                                     </div>
                                   )}
                                   
-                                  <div className="pt-4 border-t border-slate-800/80 flex justify-between items-center text-xs font-mono text-slate-500 mt-4">
-                                    <span className="flex items-center gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
-                                      CPF: {emp.cpf}
-                                    </span>
-                                    <span className="flex items-center gap-2">
-                                      PIN: <span className="text-white tracking-[0.2em]">••••</span>
-                                    </span>
+                                  <div className="pt-4 border-t border-slate-800/80 mt-4 space-y-2 text-xs font-mono text-slate-500">
+                                    <div className="flex justify-between items-center">
+                                      <span className="flex items-center gap-2">
+                                        <FileBadge className="w-3 h-3"/>
+                                        CPF: {emp.cpf}
+                                      </span>
+                                      <span className="flex items-center gap-2">
+                                        PIN: <span className="text-white tracking-[0.2em]">••••</span>
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-1 border-t border-slate-800/50">
+                                      <Calendar className="w-3 h-3 text-cyan-500" />
+                                      <span>{formatWorkDays(emp.workDays)}</span>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -3381,7 +3437,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
                   {/* Attendance Action Button */}
                   <div className="w-full max-w-md space-y-3 mb-6">
-                    {currentLocation && currentShift ? (
+                    {isDayOff ? (
+                      <div className="text-center p-4 bg-slate-950/50 border border-slate-700 rounded-lg text-slate-400 text-sm">
+                        Hoje é seu dia de folga 😴
+                      </div>
+                    ) : currentLocation && currentShift ? (
                       <button 
                         onClick={() => startAttendanceFlow(nextAction.type)}
                         disabled={isCheckingLocation || isRegisteringAttendance}

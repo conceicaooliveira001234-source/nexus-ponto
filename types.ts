@@ -47,6 +47,7 @@ export interface Employee {
   whatsapp: string;
   shifts: Shift[]; // Array de turnos
   locationIds: string[]; // Changed to array for multiple locations
+  workDays?: number[]; // 0=Dom, 1=Seg, ..., 6=Sáb. Padrão [1,2,3,4,5]
   photoBase64?: string; // Reference photo for facial recognition
   pin?: string;
   // Legacy fields (kept for compatibility, but should migrate to shifts array)
