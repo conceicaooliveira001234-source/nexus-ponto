@@ -8,6 +8,8 @@ export enum UserRole {
 
 export type ViewState = 'LANDING' | 'LOGIN_COMPANY' | 'REGISTER_COMPANY' | 'LOGIN_EMPLOYEE' | 'DASHBOARD_COMPANY' | 'DASHBOARD_EMPLOYEE' | 'FACIAL_ONBOARDING' | 'DASHBOARD_SUPER_ADMIN';
 
+export type DashboardTab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'BILLING' | 'SETTINGS';
+
 export interface CompanyData {
   uid?: string; // Firebase Auth UID
   cnpj: string;
@@ -19,6 +21,7 @@ export interface CompanyData {
   maxEmployees?: number;
   planExpiresAt?: string; // ISO Date string
   isBlocked?: boolean;
+  customPricePerEmployee?: number;
 }
 
 export interface SystemSettings {

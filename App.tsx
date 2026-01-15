@@ -5,7 +5,7 @@ import CompanyLogin from './components/auth/CompanyLogin';
 import CompanyRegister from './components/auth/CompanyRegister';
 import EmployeeLogin from './components/auth/EmployeeLogin';
 import FacialOnboarding from './components/auth/FacialOnboarding';
-import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation } from './types';
+import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation, DashboardTab } from './types';
 import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [employeeContext, setEmployeeContext] = useState<EmployeeContext | null>(null);
   const [employeeIdForOnboarding, setEmployeeIdForOnboarding] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [initialDashboardTab, setInitialDashboardTab] = useState<DashboardTab | null>(null);
 
   // Auth Listener
   useEffect(() => {
@@ -81,9 +82,9 @@ const App: React.FC = () => {
 
             if (data.planExpiresAt && new Date(data.planExpiresAt) < new Date()) {
               alert('Seu plano expirou. Renove sua assinatura para continuar.');
-              // Here you would redirect to a billing page, for now we just log out.
-              await signOut(auth);
-              setView('LANDING');
+              setCurrentCompany({ ...data, uid: user.uid });
+              setView('DASHBOARD_COMPANY');
+              setInitialDashboardTab('BILLING'); // Força a abertura na aba de pagamento
               setIsLoading(false);
               return;
             }
@@ -196,6 +197,7 @@ const App: React.FC = () => {
       await signOut(auth);
       setCurrentCompany(null);
       setEmployeeContext(null);
+      setInitialDashboardTab(null); // Reseta a aba inicial no logout
       
       // Clear all local storage related to session
       localStorage.removeItem('nexus_employee_context');
@@ -259,6 +261,7 @@ const App: React.FC = () => {
             role={UserRole.COMPANY} 
             onBack={handleLogout} 
             currentCompanyId={currentCompany?.uid}
+            initialTab={initialDashboardTab}
           />
         );
       

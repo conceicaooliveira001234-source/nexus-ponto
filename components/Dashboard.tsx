@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
-import Checkout from './Billing/Checkout';
-import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift } from '../types';
+import SubscriptionPanel from './Company/SubscriptionPanel';
+import { UserRole, ServiceLocation, Employee, CompanyData, EmployeeContext, AttendanceType, AttendanceRecord, Shift, DashboardTab } from '../types';
 import { db } from '../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDoc, getDocs, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore';
 import * as faceapi from 'face-api.js';
@@ -27,9 +27,8 @@ interface DashboardProps {
   currentCompanyId?: string;
   employeeContext?: EmployeeContext | null;
   onSetLocation?: (location: ServiceLocation | null) => void;
+  initialTab?: DashboardTab;
 }
-
-type Tab = 'OVERVIEW' | 'LOCATIONS' | 'EMPLOYEES' | 'SHIFTS' | 'BILLING' | 'SETTINGS';
 type EmployeeSubTab = 'REGISTER' | 'LIST';
 type EmployeeViewTab = 'DASHBOARD' | 'HISTORY';
 
@@ -41,11 +40,11 @@ const formatWorkDays = (days: number[] | undefined) => {
   return days.map(d => dayNames[d]).join(', ');
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, onSetLocation }) => {
+const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, employeeContext, onSetLocation, initialTab }) => {
   const isCompany = role === UserRole.COMPANY;
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showSyncMessage, setShowSyncMessage] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab || 'OVERVIEW');
   
   // -- State for Company Management --
   const [companyDetails, setCompanyDetails] = useState<CompanyData | null>(null);
@@ -2909,8 +2908,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               </div>
             )}
 
-            {activeTab === 'BILLING' && (
-              <Checkout />
+            {activeTab === 'BILLING' && companyDetails && currentCompanyId && (
+              <SubscriptionPanel company={companyDetails} companyId={currentCompanyId} />
             )}
 
             {activeTab === 'SETTINGS' && (
