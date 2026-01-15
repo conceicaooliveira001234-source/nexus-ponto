@@ -46,6 +46,18 @@ service cloud.firestore {
     }
     
     // ═══════════════════════════════════════════════════════════════
+    // SHIFTS - Turnos de trabalho
+    // ═══════════════════════════════════════════════════════════════
+    match /shifts/{shiftId} {
+      // Leitura pública para que o admin possa listar no cadastro de funcionário
+      // e o funcionário possa ver detalhes do seu turno.
+      allow read: if true;
+      // Escrita permitida apenas para o admin da empresa dona do turno.
+      allow create: if request.auth != null && request.resource.data.companyId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.companyId == request.auth.uid;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
     // USERS - Apenas o próprio usuário pode ler/escrever seus dados
     // ═══════════════════════════════════════════════════════════════
     match /users/{userId} {
