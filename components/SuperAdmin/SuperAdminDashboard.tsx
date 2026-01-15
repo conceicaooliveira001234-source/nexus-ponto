@@ -18,6 +18,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
+  const [companyToDelete, setCompanyToDelete] = useState<CompanyData | null>(null);
 
   useEffect(() => {
     // Listener for all companies
@@ -64,10 +65,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
   };
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!window.confirm(`ATENÇÃO: Isso apagará a empresa "${companyName}" e TODOS os seus funcionários, locais, turnos e registros de ponto permanentemente. Tem certeza?`)) {
-      return;
-    }
-
     setIsDeleting(companyId);
     try {
       const batch = writeBatch(db);
@@ -100,6 +97,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
       playSound.error();
     } finally {
       setIsDeleting(null);
+      setCompanyToDelete(null);
     }
   };
 
@@ -161,7 +159,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                             ) : (
                               <div className="flex justify-end items-center gap-2">
                                 <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline">Editar</button>
-                                <button onClick={() => handleDeleteCompany(company.uid!, company.companyName)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
+                                <button onClick={() => setCompanyToDelete(company)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
@@ -224,6 +222,42 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
             onClose={() => setEditingCompany(null)}
             onSave={handleUpdateCompany}
           />
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {companyToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] relative">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                <Trash2 className="w-6 h-6 text-red-400"/>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">Confirmar Exclusão</h2>
+                <p className="text-slate-400 text-sm">
+                  Tem certeza que deseja excluir permanentemente a empresa <strong>{companyToDelete.companyName}</strong> e todos os seus dados associados (funcionários, locais, turnos e registros de ponto)?
+                </p>
+                <p className="text-amber-400 text-xs mt-2 font-bold uppercase">Essa ação não pode ser desfeita.</p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-4 mt-8">
+              <button 
+                onClick={() => setCompanyToDelete(null)}
+                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => handleDeleteCompany(companyToDelete.uid!, companyToDelete.companyName)}
+                className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-sm rounded-lg flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir Permanentemente
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
