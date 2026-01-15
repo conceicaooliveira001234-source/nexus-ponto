@@ -6,7 +6,7 @@ export enum UserRole {
   NONE = 'NONE'
 }
 
-export type ViewState = 'LANDING' | 'LOGIN_COMPANY' | 'REGISTER_COMPANY' | 'LOGIN_EMPLOYEE' | 'DASHBOARD_COMPANY' | 'DASHBOARD_EMPLOYEE' | 'FACIAL_ONBOARDING';
+export type ViewState = 'LANDING' | 'LOGIN_COMPANY' | 'REGISTER_COMPANY' | 'LOGIN_EMPLOYEE' | 'DASHBOARD_COMPANY' | 'DASHBOARD_EMPLOYEE' | 'FACIAL_ONBOARDING' | 'DASHBOARD_SUPER_ADMIN';
 
 export interface CompanyData {
   uid?: string; // Firebase Auth UID
@@ -16,6 +16,14 @@ export interface CompanyData {
   email: string;
   password?: string; // Optional as we don't store it in Firestore
   tenantCode?: string; // Custom code created by the company
+  maxEmployees?: number;
+  planExpiresAt?: string; // ISO Date string
+  isBlocked?: boolean;
+}
+
+export interface SystemSettings {
+  mercadoPagoAccessToken?: string;
+  mercadoPagoPublicKey?: string;
 }
 
 export interface ServiceLocation {

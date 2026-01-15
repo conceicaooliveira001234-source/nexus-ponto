@@ -6,10 +6,13 @@ import CompanyRegister from './components/auth/CompanyRegister';
 import EmployeeLogin from './components/auth/EmployeeLogin';
 import FacialOnboarding from './components/auth/FacialOnboarding';
 import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation } from './types';
+import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import InstallButton from './components/InstallButton';
+
+const SUPER_ADMIN_EMAIL = 'admin@agentb.com';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LANDING');
@@ -49,8 +52,16 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. If no employee context, check for Company Auth
+      // 2. If no employee context, check for Company or Super Admin Auth
       if (user) {
+        // Super Admin Check
+        if (user.email === SUPER_ADMIN_EMAIL) {
+          console.log('SUPER ADMIN access granted.');
+          setView('DASHBOARD_SUPER_ADMIN');
+          setIsLoading(false);
+          return;
+        }
+
         // User is signed in, fetch company details
         try {
           const docRef = doc(db, "companies", user.uid);
@@ -58,6 +69,25 @@ const App: React.FC = () => {
           
           if (docSnap.exists()) {
             const data = docSnap.data() as CompanyData;
+
+            // SaaS Subscription/Block Check
+            if (data.isBlocked) {
+              alert('Sua conta está bloqueada. Entre em contato com o suporte.');
+              await signOut(auth);
+              setView('LANDING');
+              setIsLoading(false);
+              return;
+            }
+
+            if (data.planExpiresAt && new Date(data.planExpiresAt) < new Date()) {
+              alert('Seu plano expirou. Renove sua assinatura para continuar.');
+              // Here you would redirect to a billing page, for now we just log out.
+              await signOut(auth);
+              setView('LANDING');
+              setIsLoading(false);
+              return;
+            }
+
             setCurrentCompany({ ...data, uid: user.uid });
             setView('DASHBOARD_COMPANY');
           } else {
@@ -242,6 +272,9 @@ const App: React.FC = () => {
             onSetLocation={handleSetEmployeeLocation}
           />
         );
+
+      case 'DASHBOARD_SUPER_ADMIN':
+        return <SuperAdminDashboard onLogout={handleLogout} />;
         
       default:
         return <LandingPage onSelect={handleRoleSelect} />;

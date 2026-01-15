@@ -47,6 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
   
   // -- State for Company Management --
+  const [companyDetails, setCompanyDetails] = useState<CompanyData | null>(null);
   const [companyName, setCompanyName] = useState('NEXUS ADMIN'); // Default placeholder
   const [locations, setLocations] = useState<ServiceLocation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -405,7 +406,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         const docRef = doc(db, "companies", currentCompanyId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data() as CompanyData;
+          const data = { ...docSnap.data(), uid: docSnap.id } as CompanyData;
+          setCompanyDetails(data); // Store full company details
           if (data.companyName) setCompanyName(data.companyName);
           if (data.tenantCode) {
             setTenantCode(data.tenantCode);
@@ -2445,7 +2447,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               <div className="space-y-6">
                  {/* Sub-menu styled as distinct screens */}
                  <div className="flex bg-slate-950 p-1.5 rounded-lg border border-slate-800 w-fit gap-1">
-                    <button onClick={() => setEmployeeSubTab('REGISTER')} className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'REGISTER' ? 'bg-slate-800 text-white border border-slate-700 shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
+                    <button 
+                      onClick={() => {
+                        if (companyDetails && typeof companyDetails.maxEmployees === 'number' && employees.length >= companyDetails.maxEmployees) {
+                          alert(`Limite do plano atingido (${employees.length}/${companyDetails.maxEmployees}). Contrate mais licenças ou entre em contato com o suporte.`);
+                          playSound.error();
+                          return;
+                        }
+                        setEmployeeSubTab('REGISTER');
+                      }} 
+                      className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'REGISTER' ? 'bg-slate-800 text-white border border-slate-700 shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
                        <UserPlus className="w-4 h-4" /> {editingEmployeeId ? 'Editar Funcionário' : 'Cadastro de Funcionário'}
                     </button>
                     <button onClick={() => setEmployeeSubTab('LIST')} className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'LIST' ? 'bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
