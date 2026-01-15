@@ -67,18 +67,33 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
     }
   };
   
+  const renderFeedback = () => feedbackMessage && (
+    <div className={`mb-4 flex items-center gap-2 text-sm ${
+        feedbackMessage.type === 'success' ? 'text-green-400' : 'text-red-400'
+      } animate-in fade-in`}
+    >
+      {feedbackMessage.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+      <span>{feedbackMessage.text}</span>
+    </div>
+  );
+
   const handleUpdateCompany = async (companyId: string, data: Partial<CompanyData>) => {
+    setFeedbackMessage(null);
     try {
       await updateDoc(doc(db, 'companies', companyId), data);
       setEditingCompany(null);
       playSound.success();
+      setFeedbackMessage({ type: 'success', text: 'Empresa atualizada com sucesso!' });
+      setTimeout(() => setFeedbackMessage(null), 3000);
     } catch (error) {
       console.error('Error updating company:', error);
-      alert('Erro ao atualizar empresa.');
+      setFeedbackMessage({ type: 'error', text: 'Erro ao atualizar empresa.' });
+      setTimeout(() => setFeedbackMessage(null), 3000);
     }
   };
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    setFeedbackMessage(null);
     setIsDeleting(companyId);
     try {
       const batch = writeBatch(db);
@@ -102,12 +117,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
       // Commit all deletions at once
       await batch.commit();
 
-      alert(`Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.`);
+      setFeedbackMessage({ type: 'success', text: `Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.` });
+      setTimeout(() => setFeedbackMessage(null), 5000);
       playSound.success();
       
     } catch (error) {
       console.error('Error performing cascade delete:', error);
-      alert('Erro ao excluir a empresa e seus dados.');
+      setFeedbackMessage({ type: 'error', text: 'Erro ao excluir a empresa e seus dados.' });
+      setTimeout(() => setFeedbackMessage(null), 5000);
       playSound.error();
     } finally {
       setIsDeleting(null);
@@ -142,6 +159,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
           {activeTab === 'COMPANIES' && (
             <div>
               <h1 className="font-tech text-3xl text-white mb-6">Gerenciamento de Empresas</h1>
+              {renderFeedback()}
               <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-x-auto">
                 <table className="w-full text-sm text-left text-slate-400">
                   <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 font-mono">
@@ -191,6 +209,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
           {activeTab === 'SETTINGS' && (
             <div>
               <h1 className="font-tech text-3xl text-white mb-6">Configurações de Pagamento</h1>
+              {renderFeedback()}
               <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-8 max-w-2xl">
                 <form onSubmit={handleSavePaymentSettings}>
                   <div className="space-y-6">
@@ -237,15 +256,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                       </button>
                     )}
                   </div>
-                  {feedbackMessage && (
-                    <div className={`mt-4 flex items-center gap-2 text-sm ${
-                        feedbackMessage.type === 'success' ? 'text-green-400' : 'text-red-400'
-                      } animate-in fade-in`}
-                    >
-                      {feedbackMessage.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                      <span>{feedbackMessage.text}</span>
-                    </div>
-                  )}
                 </form>
               </div>
             </div>
