@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X, Share } from 'lucide-react';
+import { Download, X, Share, MoreVertical } from 'lucide-react';
 import { playSound } from '../lib/sounds';
 
 // Define o tipo de evento para beforeinstallprompt para ter acesso às suas propriedades
@@ -15,8 +15,13 @@ interface BeforeInstallPromptEvent extends Event {
 const InstallButton: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    // Detecta se o dispositivo é iOS para mostrar as instruções corretas
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(isIOSDevice);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -31,12 +36,15 @@ const InstallButton: React.FC = () => {
 
   const handleInstallClick = async () => {
     playSound.click();
+    // A lógica nativa de prompt tem prioridade.
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
+      // O prompt só pode ser usado uma vez.
       setDeferredPrompt(null);
     } else {
+      // Se não houver prompt nativo, mostra as instruções manuais.
       setShowInstructions(true);
     }
   };
@@ -72,14 +80,27 @@ const InstallButton: React.FC = () => {
             
             <div className="my-6 space-y-4 text-slate-300 text-sm">
               <div className="bg-slate-800/50 p-4 rounded-lg">
-                <p className="font-bold text-fuchsia-400 mb-1">Passo a passo (iOS/Safari):</p>
-                <ol className="list-decimal list-inside space-y-2">
-                  <li>Toque no ícone de <strong className="text-white">Compartilhar</strong> (<Share className="w-4 h-4 inline-block -mt-1" />) na barra do navegador.</li>
-                  <li>Role para baixo e selecione <strong className="text-white">"Adicionar à Tela de Início"</strong>.</li>
-                  <li>Confirme tocando em "Adicionar".</li>
-                </ol>
+                {isIOS ? (
+                  <>
+                    <p className="font-bold text-fuchsia-400 mb-1">Passo a passo (iOS/Safari):</p>
+                    <ol className="list-decimal list-inside space-y-2">
+                      <li>Toque no ícone de <strong className="text-white">Compartilhar</strong> (<Share className="w-4 h-4 inline-block -mt-1" />) na barra do navegador.</li>
+                      <li>Role para baixo e selecione <strong className="text-white">"Adicionar à Tela de Início"</strong>.</li>
+                      <li>Confirme tocando em "Adicionar".</li>
+                    </ol>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-fuchsia-400 mb-1">Para instalar (Android/PC):</p>
+                    <ol className="list-decimal list-inside space-y-2">
+                      <li>Toque no menu do navegador (geralmente <strong className="text-white">três pontinhos <MoreVertical className="w-4 h-4 inline-block -mt-1" /></strong>).</li>
+                      <li>Selecione <strong className="text-white">'Instalar aplicativo'</strong> ou <strong className="text-white">'Adicionar à tela inicial'</strong>.</li>
+                      <li>Siga as instruções para confirmar.</li>
+                    </ol>
+                  </>
+                )}
               </div>
-              <p className="text-xs text-slate-500 text-center">Para outros navegadores, procure pela opção "Instalar aplicativo" ou "Adicionar à tela inicial" no menu do navegador.</p>
+              <p className="text-xs text-slate-500 text-center">O processo pode variar dependendo do seu navegador.</p>
             </div>
 
             <div className="flex justify-end">
