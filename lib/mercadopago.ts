@@ -103,3 +103,35 @@ export async function checkPaymentStatus(paymentId: number): Promise<string> {
 
   return data.status; // ex: 'pending', 'approved', 'cancelled'
 }
+
+/**
+ * Processa um pagamento com cartão de crédito via Mercado Pago.
+ * @param paymentData Dados do pagamento recebidos do Payment Brick.
+ */
+export async function processCardPayment(paymentData: any): Promise<any> {
+  const accessToken = await getAccessToken();
+  const url = '/api/mp/v1/payments';
+
+  const idempotencyKey = crypto.randomUUID();
+
+  console.log('🚨 PAYLOAD CARTÃO MERCADO PAGO:', JSON.stringify(paymentData, null, 2));
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      'X-Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(paymentData),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error('Erro na API do Mercado Pago (Cartão):', data);
+    throw new Error(data.message || 'Erro ao processar pagamento com cartão.');
+  }
+
+  return data;
+}
