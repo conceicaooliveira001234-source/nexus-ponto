@@ -2285,7 +2285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   // -- Render Helpers --
 
-  const renderSidebarItem = (tab: Tab, label: string, icon: React.ReactNode) => (
+  const renderSidebarItem = (tab: DashboardTab, label: string, icon: React.ReactNode) => (
     <button
       onClick={() => { setActiveTab(tab); playSound.click(); }}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 font-mono text-sm uppercase tracking-wider ${
