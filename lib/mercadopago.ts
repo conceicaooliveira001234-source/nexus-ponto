@@ -33,18 +33,26 @@ export async function processPixPayment(
   const accessToken = await getAccessToken();
   const url = '/api/mp/v1/payments';
 
+  const cleanCpf = cpf.replace(/\D/g, '');
+  const numericAmount = Number(amount.toFixed(2));
+  const payerEmail = email || 'cliente@nexuswork.com.br'; // Fallback email
+
   const body = {
-    transaction_amount: amount,
+    transaction_amount: numericAmount,
     description: description,
     payment_method_id: 'pix',
     payer: {
-      email: email,
+      email: payerEmail,
+      first_name: 'Cliente', // Generic first name
+      last_name: 'Nexus', // Generic last name
       identification: {
         type: 'CPF',
-        number: cpf.replace(/\D/g, ''), // Envia apenas os números
+        number: cleanCpf,
       },
     },
   };
+
+  console.log('🚨 PAYLOAD MERCADO PAGO:', JSON.stringify(body, null, 2));
 
   const idempotencyKey = crypto.randomUUID();
 
