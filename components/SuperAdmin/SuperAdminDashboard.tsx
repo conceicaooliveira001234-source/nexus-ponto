@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData, SystemSettings } from '../../types';
-import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2, RotateCcw } from 'lucide-react';
 import TechBackground from '../TechBackground';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
@@ -19,6 +19,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
     mercadoPagoAccessToken: '',
   });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [settingsBeforeEdit, setSettingsBeforeEdit] = useState<SystemSettings>({});
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
   const [companyToDelete, setCompanyToDelete] = useState<CompanyData | null>(null);
@@ -202,19 +203,35 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                       disabled={!isEditingSettings}
                     />
                   </div>
-                  <div className="mt-6 flex gap-4">
+                  <div className="mt-6 flex gap-4 items-center">
                     {isEditingSettings ? (
-                      <button type="submit" className="px-6 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg flex items-center gap-2">
-                        <Save className="w-4 h-4"/> Salvar
-                      </button>
+                      <>
+                        <button type="submit" className="px-6 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg flex items-center gap-2">
+                          <Save className="w-4 h-4"/> Salvar
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setPaymentSettings(settingsBeforeEdit);
+                            setIsEditingSettings(false);
+                          }} 
+                          className="px-4 py-2 text-slate-400 hover:bg-slate-700 rounded-lg flex items-center gap-2 text-sm"
+                        >
+                          <RotateCcw className="w-3 h-3"/> Cancelar
+                        </button>
+                      </>
                     ) : (
-                      <button type="button" onClick={() => setIsEditingSettings(true)} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setSettingsBeforeEdit(paymentSettings);
+                          setIsEditingSettings(true);
+                        }} 
+                        className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg flex items-center gap-2"
+                      >
                         <Edit className="w-4 h-4"/> Editar
                       </button>
                     )}
-                     {isEditingSettings && (
-                       <button type="button" onClick={() => setIsEditingSettings(false)} className="text-slate-400 text-sm">Cancelar</button>
-                     )}
                   </div>
                 </form>
               </div>
