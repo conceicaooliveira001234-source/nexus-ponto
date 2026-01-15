@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData, SystemSettings } from '../../types';
-import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2, RotateCcw, AlertTriangle } from 'lucide-react';
 import TechBackground from '../TechBackground';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
@@ -23,6 +23,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
   const [companyToDelete, setCompanyToDelete] = useState<CompanyData | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   useEffect(() => {
     // Listener for all companies
@@ -53,13 +54,16 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
 
   const handleSavePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFeedbackMessage(null);
     try {
       await setDoc(doc(db, 'system_settings', 'payment_config'), paymentSettings, { merge: true });
-      alert('Configurações salvas!');
+      setFeedbackMessage({ type: 'success', text: 'Configurações salvas!' });
       setIsEditingSettings(false);
+      setTimeout(() => setFeedbackMessage(null), 3000);
     } catch (error) {
       console.error("Error saving payment settings:", error);
-      alert('Erro ao salvar configurações.');
+      setFeedbackMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
+      setTimeout(() => setFeedbackMessage(null), 3000);
     }
   };
   
@@ -233,6 +237,15 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
                       </button>
                     )}
                   </div>
+                  {feedbackMessage && (
+                    <div className={`mt-4 flex items-center gap-2 text-sm ${
+                        feedbackMessage.type === 'success' ? 'text-green-400' : 'text-red-400'
+                      } animate-in fade-in`}
+                    >
+                      {feedbackMessage.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                      <span>{feedbackMessage.text}</span>
+                    </div>
+                  )}
                 </form>
               </div>
             </div>
