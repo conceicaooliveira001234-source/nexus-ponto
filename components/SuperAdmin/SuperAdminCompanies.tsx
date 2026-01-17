@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch, orderBy, limit } from 'firebase/firestore';
 import { CompanyData, Transaction } from '../../types';
-import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar, ChevronDown, ChevronUp, ShoppingBag, Award, FilePieChart, History, Mail, Phone, ClipboardCopy } from 'lucide-react';
+import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar, ChevronDown, ChevronUp, ShoppingBag, Award, FilePieChart, History, Mail, Phone, ClipboardCopy, Clock } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 
 interface CompanyWithCount extends CompanyData {
   employeeCount: number;
+  createdAt?: string; // Adding this as it might be present
 }
 
 interface SuperAdminCompaniesProps {
@@ -22,7 +23,6 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
   const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
-
 
   useEffect(() => {
     const unsubCompanies = onSnapshot(collection(db, 'companies'), async (snapshot) => {
@@ -40,7 +40,7 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
         })
       );
 
-      setCompanies(companiesWithCounts);
+      setCompanies(companiesWithCounts as CompanyWithCount[]);
       setIsLoading(false);
     });
 
@@ -132,11 +132,11 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
 
               return (
                 <React.Fragment key={company.uid}>
-                  <tr className="border-b border-slate-800 hover:bg-slate-800/30">
+                  <tr className={`border-b border-slate-800 hover:bg-slate-800/30 ${expandedCompanyId === company.uid ? 'bg-slate-800/30' : ''}`}>
                     <td className="px-2 text-center">
                       <button 
                         onClick={() => setExpandedCompanyId(expandedCompanyId === company.uid ? null : company.uid)}
-                        className="p-2 rounded-full hover:bg-slate-700 text-slate-400"
+                        className="p-2 rounded-full hover:bg-slate-700 text-slate-400 transition-colors"
                         title="Ver detalhes"
                       >
                         {expandedCompanyId === company.uid ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -169,8 +169,8 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
                   </tr>
                   {expandedCompanyId === company.uid && (
                     <tr>
-                      <td colSpan={6} className="p-0 bg-slate-950">
-                        <CompanyDetails company={company} />
+                      <td colSpan={6} className="p-0 bg-slate-950 border-b border-slate-800">
+                        <CompanyDetails company={company} onImpersonate={onImpersonate} />
                       </td>
                     </tr>
                   )}
@@ -186,16 +186,15 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
   );
 };
 
-const CompanyDetails: React.FC<{ company: CompanyData }> = ({ company }) => {
+const CompanyDetails: React.FC<{ company: CompanyWithCount, onImpersonate: (c: CompanyData) => void }> = ({ company, onImpersonate }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
-  const [copySuccess, setCopySuccess] = useState('');
 
   useEffect(() => {
     const transactionsQuery = query(
       collection(db, `companies/${company.uid}/transactions`),
       orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(3)
     );
 
     const unsubscribe = onSnapshot(transactionsQuery, (snapshot) => {
@@ -210,13 +209,6 @@ const CompanyDetails: React.FC<{ company: CompanyData }> = ({ company }) => {
     return () => unsubscribe();
   }, [company.uid]);
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopySuccess('ID Copiado!');
-      setTimeout(() => setCopySuccess(''), 2000);
-    });
-  };
-
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -227,69 +219,104 @@ const CompanyDetails: React.FC<{ company: CompanyData }> = ({ company }) => {
   const isManualExpired = company.manualExpiresAt ? new Date(company.manualExpiresAt) < now : false;
 
   const statusInfo = {
-    pending: { text: 'Pix Gerado', color: 'text-amber-400 bg-amber-900/50' },
-    approved: { text: 'Aprovado', color: 'text-green-400 bg-green-900/50' },
-    rejected: { text: 'Rejeitado', color: 'text-red-400 bg-red-900/50' },
-    cancelled: { text: 'Cancelado', color: 'text-red-400 bg-red-900/50' },
+    pending: { text: 'Pendente', color: 'text-amber-400 bg-amber-900/30 border-amber-500/30' },
+    approved: { text: 'Aprovado', color: 'text-green-400 bg-green-900/30 border-green-500/30' },
+    rejected: { text: 'Rejeitado', color: 'text-red-400 bg-red-900/30 border-red-500/30' },
+    cancelled: { text: 'Cancelado', color: 'text-slate-400 bg-slate-800 border-slate-600' },
   };
 
   return (
-    <div className="bg-slate-900/80 p-6 animate-in fade-in">
+    <div className="bg-slate-900/50 p-6 animate-in slide-in-from-top-2 duration-300 shadow-inner">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4 flex items-center gap-2"><FilePieChart className="w-4 h-4 text-cyan-400"/> Raio-X do Plano</h4>
+        {/* Coluna 1: Auditoria de Vagas */}
+        <div className="bg-slate-950/80 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-xs uppercase text-slate-400 mb-4 flex items-center gap-2">
+            <FilePieChart className="w-4 h-4 text-cyan-400"/> Auditoria de Vagas
+          </h4>
           <div className="space-y-3 text-xs font-mono">
             <div className={`p-3 rounded bg-slate-900 border ${isPurchasedExpired && (company.purchasedSlots ?? 0) > 0 ? 'border-red-500/30' : 'border-cyan-500/20'}`}>
               <div className="flex justify-between items-center text-cyan-400">
-                <span className="flex items-center gap-2"><ShoppingBag className="w-3 h-3"/> Plano Contratado</span>
+                <span className="flex items-center gap-2"><ShoppingBag className="w-3 h-3"/> Slots Comprados</span>
                 <span className="font-bold text-lg text-white">{company.purchasedSlots ?? 0}</span>
               </div>
-              <p className={`text-right mt-1 ${isPurchasedExpired && (company.purchasedSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>Vence: {formatDate(company.purchasedExpiresAt)}</p>
+              <p className={`text-right mt-1 ${isPurchasedExpired && (company.purchasedSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                Vence: {formatDate(company.purchasedExpiresAt)}
+              </p>
             </div>
             <div className={`p-3 rounded bg-slate-900 border ${isManualExpired && (company.manualSlots ?? 0) > 0 ? 'border-red-500/30' : 'border-fuchsia-500/20'}`}>
               <div className="flex justify-between items-center text-fuchsia-400">
-                <span className="flex items-center gap-2"><Award className="w-3 h-3"/> Bônus Manual</span>
+                <span className="flex items-center gap-2"><Award className="w-3 h-3"/> Slots Bônus</span>
                 <span className="font-bold text-lg text-white">{company.manualSlots ?? 0}</span>
               </div>
-               <p className={`text-right mt-1 ${isManualExpired && (company.manualSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>Vence: {formatDate(company.manualExpiresAt)}</p>
+               <p className={`text-right mt-1 ${isManualExpired && (company.manualSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                 Vence: {formatDate(company.manualExpiresAt)}
+               </p>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+              <span className="text-slate-400">Total Real Permitido:</span>
+              <span className="font-bold text-white text-sm">{company.maxEmployees || 0}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4 flex items-center gap-2"><History className="w-4 h-4 text-green-400"/> Últimas Transações</h4>
+        {/* Coluna 2: Histórico de Transações (PIX) */}
+        <div className="bg-slate-950/80 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-xs uppercase text-slate-400 mb-4 flex items-center gap-2">
+            <History className="w-4 h-4 text-green-400"/> Últimos Pagamentos
+          </h4>
           <div className="space-y-2">
             {loadingTransactions ? <div className="text-center p-4"><Loader2 className="animate-spin text-slate-500 inline-block"/></div> :
               transactions.length > 0 ? transactions.map(tx => {
                 const status = statusInfo[tx.status] || { text: tx.status, color: 'text-slate-400 bg-slate-700' };
                 return (
-                  <div key={tx.id} className="flex justify-between items-center text-xs font-mono bg-slate-900 p-2 rounded">
+                  <div key={tx.id} className="flex justify-between items-center text-xs font-mono bg-slate-900 p-2 rounded border border-slate-800">
                     <div>
-                      <p className="text-slate-300">{formatDate(tx.createdAt)}</p>
-                      <p className="text-slate-500 text-[10px]">{tx.description}</p>
+                      <p className="text-slate-300">{new Date(tx.createdAt).toLocaleDateString('pt-BR')} <span className="text-slate-600">|</span> {new Date(tx.createdAt).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</p>
+                      <p className="text-slate-500 text-[10px] mt-0.5">{tx.description}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-white">{tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>{status.text}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${status.color} inline-block mt-1`}>{status.text}</span>
                     </div>
                   </div>
                 )
-              }) : <p className="text-xs text-slate-500 text-center py-4">Nenhuma transação encontrada.</p>
+              }) : <p className="text-xs text-slate-500 text-center py-8 border border-dashed border-slate-800 rounded">Nenhuma transação encontrada.</p>
             }
           </div>
         </div>
 
-        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4">Auditoria</h4>
-           <div className="space-y-3 text-xs text-slate-400 font-mono">
-              <div className="flex items-center gap-2"><Mail className="w-3 h-3"/> <span>{company.email}</span></div>
-              <div className="flex items-center gap-2"><Phone className="w-3 h-3"/> <span>{company.whatsapp}</span></div>
-              <div className="pt-3 border-t border-slate-800">
-                <p className="truncate text-slate-500" title={company.uid}>ID: {company.uid}</p>
-                <button onClick={() => handleCopy(company.uid!)} className="text-cyan-400 hover:underline flex items-center gap-1 mt-1 text-xs">
-                  <ClipboardCopy className="w-3 h-3" /> {copySuccess || 'Copiar ID'}
+        {/* Coluna 3: Informações Rápidas */}
+        <div className="bg-slate-950/80 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-xs uppercase text-slate-400 mb-4 flex items-center gap-2">
+            <Users className="w-4 h-4 text-fuchsia-400"/> Informações Rápidas
+          </h4>
+           <div className="space-y-4 text-xs text-slate-400 font-mono">
+              <div className="flex items-center justify-between p-2 bg-slate-900 rounded">
+                <span className="flex items-center gap-2"><Clock className="w-3 h-3"/> Criado em:</span>
+                <span className="text-white">{company.createdAt ? new Date(company.createdAt).toLocaleDateString('pt-BR') : 'N/A'}</span>
+              </div>
+              
+              <div className="flex items-center justify-between p-2 bg-slate-900 rounded">
+                <span className="flex items-center gap-2"><Users className="w-3 h-3"/> Funcionários:</span>
+                <span className="text-white font-bold">{company.employeeCount} cadastrados</span>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  onClick={() => {
+                    if (window.confirm(`Acessar o painel de ${company.companyName}?`)) {
+                      onImpersonate(company);
+                    }
+                  }}
+                  className="w-full py-2 bg-fuchsia-600/20 hover:bg-fuchsia-600/30 text-fuchsia-400 hover:text-fuchsia-300 border border-fuchsia-500/30 rounded flex items-center justify-center gap-2 transition-colors font-bold"
+                >
+                  <ExternalLink className="w-3 h-3" /> Acessar Painel (God Mode)
                 </button>
+              </div>
+              
+              <div className="text-[10px] text-slate-600 text-center pt-2">
+                ID: {company.uid}
               </div>
            </div>
         </div>
