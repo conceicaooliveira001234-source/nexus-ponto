@@ -24,11 +24,11 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'cancelled' | null>(null);
 
   const handlePaymentSuccess = useCallback(async (newPurchasedSlots: number) => {
-    const newExpiryDate = new Date();
-    newExpiryDate.setDate(newExpiryDate.getDate() + 30);
+    const newPurchasedExpiryDate = new Date();
+    newPurchasedExpiryDate.setDate(newPurchasedExpiryDate.getDate() + 30);
 
     try {
-      // 1. Get current company data to preserve manualSlots
+      // 1. Get current company data to read manual slots info
       const companyRef = doc(db, 'companies', companyId);
       const companySnap = await getDoc(companyRef);
       if (!companySnap.exists()) {
@@ -36,18 +36,27 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
       }
       const currentData = companySnap.data() as CompanyData;
       const existingManualSlots = currentData.manualSlots || 0;
-      
-      // 2. Calculate new total
-      const newTotal = newPurchasedSlots + existingManualSlots;
+      const manualExpiresAt = currentData.manualExpiresAt ? new Date(currentData.manualExpiresAt) : null;
 
+      // 2. Recalculate totals
+      const now = new Date();
+      const validManualSlots = (manualExpiresAt && manualExpiresAt > now) ? existingManualSlots : 0;
+      const newTotalEmployees = newPurchasedSlots + validManualSlots;
+
+      let latestExpiryDate = newPurchasedExpiryDate;
+      if (manualExpiresAt && manualExpiresAt > newPurchasedExpiryDate) {
+        latestExpiryDate = manualExpiresAt;
+      }
+      
       // 3. Update doc in Firestore
       await updateDoc(companyRef, {
         purchasedSlots: newPurchasedSlots,
-        manualSlots: existingManualSlots, // ensure it's preserved
-        maxEmployees: newTotal,
-        subscriptionExpiresAt: newExpiryDate.toISOString(),
+        purchasedExpiresAt: newPurchasedExpiryDate.toISOString(),
         planStatus: 'active',
+        maxEmployees: newTotalEmployees,
+        subscriptionExpiresAt: latestExpiryDate.toISOString(),
       });
+
       setPaymentStatus('approved');
       playSound.success();
     } catch (err) {
