@@ -4,10 +4,9 @@ import { db } from '../../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { processPixPayment, checkPaymentStatus } from '../../lib/mercadopago';
 import TechInput from '../ui/TechInput';
-import { Loader2, QrCode, Copy, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, QrCode, Copy, CheckCircle } from 'lucide-react';
 import QRCode from 'qrcode.react';
 import { playSound } from '../../lib/sounds';
-import CardPaymentModal from './CardPaymentModal';
 
 interface SubscriptionPanelProps {
   company: CompanyData | null;
@@ -19,12 +18,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   
   const [numEmployees, setNumEmployees] = useState(company?.maxEmployees || 5);
   const [payerCpf, setPayerCpf] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ paymentId: number; qrCode: string; qrCodeBase64: string } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'cancelled' | null>(null);
-  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   const handlePaymentSuccess = useCallback(async (newEmployeeLimit: number) => {
     const newExpiryDate = new Date();
@@ -105,11 +102,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
     });
   };
 
-  const handleCardPayment = async () => {
-    setIsCardModalOpen(true);
-    playSound.click();
-  };
-
   if (paymentStatus === 'approved') {
     return (
       <div className="text-center p-8 bg-green-900/20 border border-green-500/30 rounded-xl animate-in fade-in zoom-in-95">
@@ -160,21 +152,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
 
   return (
     <>
-      {isCardModalOpen && (
-        <CardPaymentModal
-          amount={Number((numEmployees * PRICE_PER_EMPLOYEE).toFixed(2))}
-          payerEmail={company!.email}
-          onClose={() => setIsCardModalOpen(false)}
-          onPaymentSuccess={() => {
-            setIsCardModalOpen(false);
-            handlePaymentSuccess(numEmployees);
-          }}
-        />
-      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-slate-900/50 border border-slate-700 rounded-lg p-8">
         <h2 className="text-2xl font-bold text-white mb-2">Gerenciar Assinatura</h2>
-        <p className="text-slate-400 mb-6">Selecione o número de licenças e a forma de pagamento.</p>
+        <p className="text-slate-400 mb-6">Selecione o número de licenças para gerar a cobrança via PIX.</p>
         
         <div className="space-y-6">
           <div>
@@ -205,19 +186,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
               />
           </div>
           
-          <div>
-             <label className="text-sm font-bold text-white mb-2 block">Forma de Pagamento</label>
-             <div className="flex gap-2">
-                <button onClick={() => setPaymentMethod('pix')} className={`flex-1 p-4 rounded-lg border-2 flex items-center gap-3 ${paymentMethod === 'pix' ? 'border-cyan-500 bg-cyan-500/10' : 'border-slate-600 bg-slate-800'}`}>
-                    <QrCode className={paymentMethod === 'pix' ? 'text-cyan-400' : 'text-slate-400'}/>
-                    <span className="font-bold">PIX</span>
-                </button>
-                <button onClick={() => setPaymentMethod('card')} className={`flex-1 p-4 rounded-lg border-2 flex items-center gap-3 ${paymentMethod === 'card' ? 'border-cyan-500 bg-cyan-500/10' : 'border-slate-600 bg-slate-800'}`}>
-                    <CreditCard className={paymentMethod === 'card' ? 'text-cyan-400' : 'text-slate-400'}/>
-                    <span className="font-bold">Cartão de Crédito</span>
-                </button>
-             </div>
-          </div>
         </div>
       </div>
 
@@ -237,25 +205,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
             <span className="font-bold text-cyan-400">{(numEmployees * PRICE_PER_EMPLOYEE).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </div>
         </div>
-        {paymentMethod === 'pix' ? (
-          <button 
-            onClick={handleGeneratePix} 
-            disabled={isLoading}
-            className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
-          >
-            {isLoading ? <Loader2 className="animate-spin" /> : <QrCode />}
-            Pagar com PIX
-          </button>
-        ) : (
-          <button 
-            onClick={handleCardPayment} 
-            disabled={isLoading}
-            className="w-full mt-6 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
-          >
-            {isLoading ? <Loader2 className="animate-spin" /> : <CreditCard />}
-            Pagar com Cartão
-          </button>
-        )}
+        <button 
+          onClick={handleGeneratePix} 
+          disabled={isLoading}
+          className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+        >
+          {isLoading ? <Loader2 className="animate-spin" /> : <QrCode />}
+          Pagar com PIX
+        </button>
         {error && <p className="text-red-400 text-xs mt-2 text-center">{error}</p>}
       </div>
     </div>
