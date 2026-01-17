@@ -42,9 +42,10 @@ export async function processPixPayment(
   amount: number,
   email: string,
   cpf: string,
-  description: string
+  description: string,
+  accessToken?: string
 ): Promise<PixPaymentResponse> {
-  const accessToken = await getAccessToken();
+  const token = accessToken || await getAccessToken();
   const url = `${window.location.origin}/api/mp/v1/payments`;
 
   const cleanCpf = cpf.replace(/\D/g, '');
@@ -74,7 +75,7 @@ export async function processPixPayment(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
       'X-Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(body),
@@ -97,14 +98,14 @@ export async function processPixPayment(
 /**
  * Verifica o status de um pagamento no Mercado Pago.
  */
-export async function checkPaymentStatus(paymentId: number): Promise<string> {
-  const accessToken = await getAccessToken();
+export async function checkPaymentStatus(paymentId: number, accessToken?: string): Promise<string> {
+  const token = accessToken || await getAccessToken();
   const url = `${window.location.origin}/api/mp/v1/payments/${paymentId}`;
 
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
     },
   });
 
