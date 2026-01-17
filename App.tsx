@@ -9,7 +9,7 @@ import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation, Das
 import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 const SUPER_ADMIN_EMAIL = 'admin@agentb.com';
@@ -95,8 +95,24 @@ const App: React.FC = () => {
               return;
             }
 
-            if (data.subscriptionExpiresAt && (data.subscriptionExpiresAt as unknown as Timestamp).toDate() < new Date()) {
+            const expiry = data.subscriptionExpiresAt as any;
+            const isExpired = expiry && (typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry)) < new Date();
+
+            if (isExpired) {
               alert('Seu plano expirou. Renove sua assinatura para continuar.');
+
+              // Auto-correção: se o plano expirou mas ainda está ativo, muda para inativo.
+              if (data.planStatus === 'active') {
+                console.warn("Plano expirado, mas status ainda 'active'. Auto-corrigindo para 'inactive'.");
+                try {
+                  const companyRef = doc(db, "companies", user.uid);
+                  await updateDoc(companyRef, { planStatus: 'inactive' });
+                  data.planStatus = 'inactive'; // Atualiza o objeto de dados local
+                } catch (updateError) {
+                  console.error("Falha ao auto-corrigir o status do plano:", updateError);
+                }
+              }
+
               setCurrentCompany({ ...data, uid: user.uid });
               setView('DASHBOARD_COMPANY');
               setInitialDashboardTab('BILLING'); // Força a abertura na aba de pagamento

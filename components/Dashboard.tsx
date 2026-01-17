@@ -148,6 +148,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [notificationPermission, setNotificationPermission] = useState('Notification' in window ? Notification.permission : 'denied');
   const [showNotificationHelp, setShowNotificationHelp] = useState(false);
 
+  const isSubscriptionExpired = useMemo(() => {
+    if (!isCompany || !companyDetails?.subscriptionExpiresAt) return false;
+    
+    const expiry = companyDetails.subscriptionExpiresAt as any;
+    // Lida com Timestamps do Firestore e strings ISO
+    const expiryDate = typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry);
+
+    return new Date() > expiryDate;
+  }, [isCompany, companyDetails]);
+
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type, visible: true });
     // Auto hide after 5 seconds
@@ -155,6 +165,16 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       setToast(prev => ({ ...prev, visible: false }));
     }, 5000);
   }, []);
+
+  const handleTabChange = (tab: DashboardTab) => {
+    if (isSubscriptionExpired && tab !== 'BILLING') {
+      showToast('Sua assinatura expirou. Renove para acessar outras áreas.', 'error');
+      playSound.error();
+      return;
+    }
+    setActiveTab(tab);
+    playSound.click();
+  };
 
   useEffect(() => {
     const handleOnline = () => {
@@ -2328,7 +2348,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
   const renderSidebarItem = (tab: DashboardTab, label: string, icon: React.ReactNode) => (
     <button
-      onClick={() => { setActiveTab(tab); playSound.click(); }}
+      onClick={() => handleTabChange(tab)}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 font-mono text-sm uppercase tracking-wider ${
         activeTab === tab 
           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 
@@ -2373,6 +2393,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         </aside>
 
         <main className="relative z-30 flex-1 h-screen overflow-y-auto overflow-x-hidden">
+          {isSubscriptionExpired && (
+            <div className="sticky top-0 w-full p-2 bg-red-600/90 backdrop-blur border-b-2 border-red-400 text-white text-center text-sm font-bold z-50">
+              Sua assinatura expirou. Renove para reativar todas as funcionalidades.
+            </div>
+          )}
           {!isOnline && (
             <div className="sticky top-0 w-full p-2 bg-amber-600/90 backdrop-blur border-b-2 border-amber-400 text-white text-center text-xs font-bold z-50">
               ⚠ Você está offline. Os dados serão sincronizados quando a conexão voltar.
@@ -2392,12 +2417,12 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           {/* Mobile Nav */}
           <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-900 border-b border-slate-800">
             {/* ... tabs ... */}
-            <button onClick={() => setActiveTab('OVERVIEW')} className={`px-4 py-2 rounded text-xs ${activeTab === 'OVERVIEW' ? 'bg-cyan-600' : 'text-slate-400'}`}>Visão</button>
-            <button onClick={() => setActiveTab('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
-            <button onClick={() => setActiveTab('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
-            <button onClick={() => setActiveTab('SHIFTS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SHIFTS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Turnos</button>
-            <button onClick={() => setActiveTab('BILLING')} className={`px-4 py-2 rounded text-xs ${activeTab === 'BILLING' ? 'bg-cyan-600' : 'text-slate-400'}`}>Financ.</button>
-            <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
+            <button onClick={() => handleTabChange('OVERVIEW')} className={`px-4 py-2 rounded text-xs ${activeTab === 'OVERVIEW' ? 'bg-cyan-600' : 'text-slate-400'}`}>Visão</button>
+            <button onClick={() => handleTabChange('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
+            <button onClick={() => handleTabChange('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
+            <button onClick={() => handleTabChange('SHIFTS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SHIFTS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Turnos</button>
+            <button onClick={() => handleTabChange('BILLING')} className={`px-4 py-2 rounded text-xs ${activeTab === 'BILLING' ? 'bg-cyan-600' : 'text-slate-400'}`}>Financ.</button>
+            <button onClick={() => handleTabChange('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
           </div>
 
           <div className="p-6 md:p-12 max-w-6xl mx-auto">
