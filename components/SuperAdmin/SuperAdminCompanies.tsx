@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch, orderBy, limit } from 'firebase/firestore';
 import { CompanyData, Transaction } from '../../types';
@@ -257,8 +258,8 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
         </div>
       )}
 
-      {editingCompany && <CompanyEditModal company={editingCompany} onClose={() => setEditingCompany(null)} onSave={handleUpdateCompany} />}
-      {companyToDelete && <DeleteConfirmationModal company={companyToDelete} onClose={() => setCompanyToDelete(null)} onConfirm={handleDeleteCompany} isDeleting={!!isDeleting} />}
+      {editingCompany && createPortal(<CompanyEditModal company={editingCompany} onClose={() => setEditingCompany(null)} onSave={handleUpdateCompany} />, document.body)}
+      {companyToDelete && createPortal(<DeleteConfirmationModal company={companyToDelete} onClose={() => setCompanyToDelete(null)} onConfirm={handleDeleteCompany} isDeleting={!!isDeleting} />, document.body)}
     </div>
   );
 };
@@ -457,7 +458,7 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
 
   return (
      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-slate-900 border border-fuchsia-500/30 rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-lg max-h-[90vh] overflow-y-auto">
+        <div className="bg-slate-900 border border-fuchsia-500/30 rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-lg max-h-[85vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-white">Editar {company.companyName}</h2>
             <button onClick={onClose}><X className="text-slate-500 hover:text-white"/></button>
