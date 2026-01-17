@@ -201,14 +201,28 @@ const App: React.FC = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password!);
       const user = userCredential.user;
 
+      // Calculate bonus expiration (1 month from now)
+      const now = new Date();
+      const bonusExpiry = new Date(now);
+      bonusExpiry.setMonth(bonusExpiry.getMonth() + 1);
+
       // 2. Save additional company data to Firestore
       const companyDataToSave = {
         cnpj: data.cnpj,
         companyName: data.companyName,
         whatsapp: data.whatsapp,
         email: data.email,
-        uid: user.uid
-        // We do NOT save the password in Firestore
+        uid: user.uid,
+        
+        // Default Plan Settings:
+        planStatus: 'active',
+        pricePerEmployee: 19.90,
+        maxEmployees: 1, // 0 purchased + 1 bonus
+        purchasedSlots: 0,
+        purchasedExpiresAt: null,
+        manualSlots: 1, // Bonus cortesia
+        manualExpiresAt: bonusExpiry.toISOString(),
+        subscriptionExpiresAt: bonusExpiry.toISOString() // Overall expiry matches bonus for now
       };
 
       await setDoc(doc(db, "companies", user.uid), companyDataToSave);
