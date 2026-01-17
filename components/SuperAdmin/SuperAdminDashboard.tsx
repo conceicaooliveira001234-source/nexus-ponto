@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, setDoc, getDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData, SystemSettings } from '../../types';
-import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2, RotateCcw, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Building2, Cog, LayoutDashboard, Users, X, Save, Edit, CheckCircle, XCircle, Trash2, Loader2, RotateCcw, AlertTriangle } from 'lucide-react';
 import TechBackground from '../TechBackground';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 import SuperAdminCompanies from './SuperAdminCompanies';
+import SuperAdminOverview from './SuperAdminOverview';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
 }
 
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'COMPANIES' | 'SETTINGS'>('COMPANIES');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'COMPANIES' | 'SETTINGS'>('OVERVIEW');
   const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({
     mercadoPagoPublicKey: '',
     mercadoPagoAccessToken: '',
@@ -75,6 +76,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
           <h2 className="font-tech text-xl text-fuchsia-400 font-bold">SUPER ADMIN</h2>
         </div>
         <nav className="flex-1 p-4 space-y-2">
+          <button onClick={() => setActiveTab('OVERVIEW')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-mono uppercase ${activeTab === 'OVERVIEW' ? 'bg-fuchsia-500/20 text-fuchsia-400' : 'text-slate-400 hover:bg-slate-800'}`}>
+            <LayoutDashboard className="w-4 h-4" /> Visão Geral
+          </button>
           <button onClick={() => setActiveTab('COMPANIES')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-mono uppercase ${activeTab === 'COMPANIES' ? 'bg-fuchsia-500/20 text-fuchsia-400' : 'text-slate-400 hover:bg-slate-800'}`}>
             <Building2 className="w-4 h-4" /> Empresas
           </button>
@@ -100,6 +104,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
 
         {/* Mobile Nav */}
         <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-900 border-b border-slate-800">
+            <button onClick={() => setActiveTab('OVERVIEW')} className={`px-4 py-2 rounded text-xs font-mono uppercase ${activeTab === 'OVERVIEW' ? 'bg-fuchsia-600 text-white' : 'text-slate-400'}`}>
+                Visão Geral
+            </button>
             <button onClick={() => setActiveTab('COMPANIES')} className={`px-4 py-2 rounded text-xs font-mono uppercase ${activeTab === 'COMPANIES' ? 'bg-fuchsia-600 text-white' : 'text-slate-400'}`}>
                 Empresas
             </button>
@@ -108,6 +115,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
             </button>
         </div>
         <div className="p-6 md:p-12 max-w-7xl mx-auto">
+          {activeTab === 'OVERVIEW' && (
+            <SuperAdminOverview />
+          )}
           {activeTab === 'COMPANIES' && (
             <SuperAdminCompanies />
           )}

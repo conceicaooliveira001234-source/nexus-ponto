@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Users, Building2, Wallet, Activity, Loader2 } from 'lucide-react';
+import { Users, Building2, Wallet, Activity, Loader2, TrendingUp } from 'lucide-react';
 
-interface SaasMetrics {
+interface SaasMetric {
   totalCompanies: number;
   activeCompanies: number;
   totalEmployees: number;
-  mrr: number;
+  monthlyRevenue: number;
+  churnRate: number;
 }
 
 const SuperAdminOverview: React.FC = () => {
-  const [metrics, setMetrics] = useState<SaasMetrics | null>(null);
+  const [metrics, setMetrics] = useState<SaasMetric | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -30,13 +31,15 @@ const SuperAdminOverview: React.FC = () => {
         const totalCompanies = companiesSnapshot.size;
         const activeCompanies = allCompanies.filter(c => c.planStatus === 'active').length;
         const totalEmployees = employeesSnapshot.size;
-        const mrr = activeCompanies * 99; // Valor fictício do plano base
+        const monthlyRevenue = activeCompanies * 99;
+        const churnRate = 0; // Placeholder
 
         setMetrics({
           totalCompanies,
           activeCompanies,
           totalEmployees,
-          mrr,
+          monthlyRevenue,
+          churnRate,
         });
 
       } catch (error) {
@@ -64,7 +67,7 @@ const SuperAdminOverview: React.FC = () => {
             <MetricCard 
                 icon={<Wallet className="w-6 h-6 text-green-400" />}
                 title="MRR Estimado"
-                value={metrics?.mrr.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'R$ 0,00'}
+                value={metrics?.monthlyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'R$ 0,00'}
                 subtitle="Receita Mensal Recorrente"
             />
             <MetricCard 
@@ -80,9 +83,9 @@ const SuperAdminOverview: React.FC = () => {
                 subtitle="Licenças em uso"
             />
             <MetricCard 
-                icon={<Activity className="w-6 h-6 text-amber-400" />}
-                title="Atividade (24h)"
-                value="N/A"
+                icon={<TrendingUp className="w-6 h-6 text-amber-400" />}
+                title="Churn Rate"
+                value={`${metrics?.churnRate || 0}%`}
                 subtitle="Recurso em desenvolvimento"
             />
         </div>
