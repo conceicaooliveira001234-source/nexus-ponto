@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch, orderBy, limit } from 'firebase/firestore';
 import { CompanyData, Transaction } from '../../types';
-import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar, ChevronDown, ChevronUp, ShoppingBag, Award, FilePieChart, History, Mail, Phone, ClipboardCopy, Clock, Search } from 'lucide-react';
+import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar, ChevronDown, ChevronUp, ShoppingBag, Award, FilePieChart, History, Mail, Phone, ClipboardCopy, Clock, Search, Building2, MoreVertical } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 
@@ -25,6 +25,11 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
   const [feedbackMessage, setFeedbackMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
   const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const showFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedbackMessage({ type, text });
+    setTimeout(() => setFeedbackMessage(null), 4000);
+  };
 
   useEffect(() => {
     setIsLoading(true);
@@ -84,11 +89,6 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
       ));
     }
   }, [searchTerm, companies]);
-  
-  const showFeedback = (type: 'success' | 'error', text: string) => {
-    setFeedbackMessage({ type, text });
-    setTimeout(() => setFeedbackMessage(null), 4000);
-  };
 
   const handleUpdateCompany = async (companyId: string, data: Partial<CompanyData>) => {
     try {
