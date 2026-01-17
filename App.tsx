@@ -227,14 +227,13 @@ const App: React.FC = () => {
 
       await setDoc(doc(db, "companies", user.uid), companyDataToSave);
 
-      alert("Conta criada com sucesso!");
       // Listener will redirect to Dashboard automatically
     } catch (error: any) {
       console.error(error);
       let msg = "Erro ao criar conta.";
       if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está em uso.";
       if (error.code === 'auth/weak-password') msg = "A senha deve ter pelo menos 6 caracteres.";
-      alert(msg);
+      throw new Error(msg);
     }
   };
 
