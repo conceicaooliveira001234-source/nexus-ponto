@@ -15,7 +15,7 @@ interface SubscriptionPanelProps {
 }
 
 const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyId }) => {
-  const PRICE_PER_EMPLOYEE = company?.customPricePerEmployee || 19.90;
+  const PRICE_PER_EMPLOYEE = company?.pricePerEmployee || 19.90;
   
   const [numEmployees, setNumEmployees] = useState(company?.maxEmployees || 5);
   const [payerCpf, setPayerCpf] = useState('');
