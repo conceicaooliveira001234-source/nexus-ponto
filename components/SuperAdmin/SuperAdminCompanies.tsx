@@ -168,32 +168,46 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
 
 const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onSave: (id: string, data: Partial<CompanyData>) => void}> = ({ company, onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    manualSlots: company.manualSlots ?? (company.maxEmployees ?? 5) - (company.purchasedSlots ?? 0),
     purchasedSlots: company.purchasedSlots ?? 0,
+    purchasedExpiresAt: company.purchasedExpiresAt ? new Date(company.purchasedExpiresAt).toISOString().split('T')[0] : '',
+    manualSlots: company.manualSlots ?? 0,
+    manualExpiresAt: company.manualExpiresAt ? new Date(company.manualExpiresAt).toISOString().split('T')[0] : '',
     planStatus: company.planStatus || 'active',
     pricePerEmployee: company.pricePerEmployee || 19.90,
-    subscriptionExpiresAt: company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
   });
 
-  const totalSlots = Number(formData.manualSlots) + Number(formData.purchasedSlots);
+  const toDate = (dateString: string) => dateString ? new Date(dateString + 'T00:00:00') : null;
+  
+  const now = new Date();
+  const purchasedDate = toDate(formData.purchasedExpiresAt);
+  const manualDate = toDate(formData.manualExpiresAt);
+
+  const validPurchasedSlots = purchasedDate && purchasedDate > now ? Number(formData.purchasedSlots) : 0;
+  const validManualSlots = manualDate && manualDate > now ? Number(formData.manualSlots) : 0;
+  const totalValidSlots = validPurchasedSlots + validManualSlots;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let latestExpiry: Date | null = null;
+    if (purchasedDate) latestExpiry = purchasedDate;
+    if (manualDate && (!latestExpiry || manualDate > latestExpiry)) {
+      latestExpiry = manualDate;
+    }
     
     const dataToSave: Partial<CompanyData> = {
-      manualSlots: Number(formData.manualSlots),
       purchasedSlots: Number(formData.purchasedSlots),
-      maxEmployees: totalSlots,
+      purchasedExpiresAt: purchasedDate ? purchasedDate.toISOString() : undefined,
+      manualSlots: Number(formData.manualSlots),
+      manualExpiresAt: manualDate ? manualDate.toISOString() : undefined,
+      maxEmployees: totalValidSlots,
+      subscriptionExpiresAt: latestExpiry ? latestExpiry.toISOString() : undefined,
       planStatus: formData.planStatus as 'active' | 'inactive' | 'blocked',
       pricePerEmployee: Number(formData.pricePerEmployee),
-      subscriptionExpiresAt: formData.subscriptionExpiresAt ? new Date(formData.subscriptionExpiresAt + 'T00:00:00').toISOString() : undefined,
     };
 
-    // Auto-update status to active if a future expiry date is set for an inactive/blocked plan
-    if (dataToSave.subscriptionExpiresAt && new Date(dataToSave.subscriptionExpiresAt) > new Date()) {
-      if (dataToSave.planStatus === 'inactive' || dataToSave.planStatus === 'blocked') {
-        dataToSave.planStatus = 'active';
-      }
+    if (latestExpiry && latestExpiry > now && (dataToSave.planStatus === 'inactive' || dataToSave.planStatus === 'blocked')) {
+      dataToSave.planStatus = 'active';
     }
     
     onSave(company.uid!, dataToSave);
@@ -207,46 +221,60 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
             <button onClick={onClose}><X className="text-slate-500 hover:text-white"/></button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-                <div className="grid grid-cols-2 gap-4">
-                    <TechInput 
-                        label="Slots Comprados (Automático)"
-                        type="number"
-                        value={formData.purchasedSlots}
-                        icon={<Users className="w-4 h-4"/>}
-                        disabled
-                        className="opacity-60"
-                    />
-                    <TechInput 
-                        label="Slots Manuais (Bônus)"
-                        type="number"
-                        value={formData.manualSlots}
-                        onChange={e => setFormData({...formData, manualSlots: parseInt(e.target.value) || 0})}
-                        icon={<Users className="w-4 h-4"/>}
-                    />
-                </div>
-                <p className="text-right text-sm text-slate-400 mt-2 font-mono">
-                    Total Disponível: <span className="font-bold text-cyan-400">{totalSlots}</span>
-                </p>
-            </div>
             
-            <div className="grid grid-cols-2 gap-4">
-               <TechInput 
-                label="Preço por Funcionário (R$)"
-                type="number"
-                step="0.01"
-                value={formData.pricePerEmployee}
-                onChange={e => setFormData({...formData, pricePerEmployee: parseFloat(e.target.value) || 0})}
-                icon={<DollarSign className="w-4 h-4"/>}
-              />
-              <TechInput 
-                label="Validade da Assinatura"
-                type="date"
-                value={formData.subscriptionExpiresAt}
-                onChange={e => setFormData({...formData, subscriptionExpiresAt: e.target.value})}
-                icon={<Calendar className="w-4 h-4"/>}
-              />
-            </div>
+            <fieldset className="border-2 border-cyan-500/30 p-4 rounded-lg space-y-4">
+              <legend className="px-2 font-mono text-cyan-400 text-sm">Plano Contratado (Automático)</legend>
+              <div className="grid grid-cols-2 gap-4">
+                <TechInput 
+                  label="Qtd. Comprada"
+                  type="number"
+                  value={formData.purchasedSlots}
+                  onChange={e => setFormData({...formData, purchasedSlots: parseInt(e.target.value) || 0})}
+                  icon={<Users className="w-4 h-4"/>}
+                />
+                <TechInput 
+                  label="Vence em"
+                  type="date"
+                  value={formData.purchasedExpiresAt}
+                  onChange={e => setFormData({...formData, purchasedExpiresAt: e.target.value})}
+                  icon={<Calendar className="w-4 h-4"/>}
+                />
+              </div>
+            </fieldset>
+
+            <fieldset className="border-2 border-fuchsia-500/30 p-4 rounded-lg space-y-4">
+              <legend className="px-2 font-mono text-fuchsia-400 text-sm">Bônus / Cortesia (Manual)</legend>
+              <div className="grid grid-cols-2 gap-4">
+                <TechInput 
+                  label="Qtd. Bônus"
+                  type="number"
+                  value={formData.manualSlots}
+                  onChange={e => setFormData({...formData, manualSlots: parseInt(e.target.value) || 0})}
+                  icon={<Users className="w-4 h-4"/>}
+                />
+                <TechInput 
+                  label="Vence em"
+                  type="date"
+                  value={formData.manualExpiresAt}
+                  onChange={e => setFormData({...formData, manualExpiresAt: e.target.value})}
+                  icon={<Calendar className="w-4 h-4"/>}
+                />
+              </div>
+            </fieldset>
+            
+            <p className="text-right text-sm text-slate-400 font-mono">
+                Total de Vagas Válidas: <span className="font-bold text-cyan-400 text-base">{totalValidSlots}</span>
+            </p>
+            
+            <TechInput 
+              label="Preço por Funcionário (R$)"
+              type="number"
+              step="0.01"
+              value={formData.pricePerEmployee}
+              onChange={e => setFormData({...formData, pricePerEmployee: parseFloat(e.target.value) || 0})}
+              icon={<DollarSign className="w-4 h-4"/>}
+            />
+
             <div>
               <label className="text-xs font-mono text-cyan-400 tracking-wider uppercase ml-1">Status do Plano</label>
               <select 
