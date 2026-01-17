@@ -168,17 +168,22 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
 
 const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onSave: (id: string, data: Partial<CompanyData>) => void}> = ({ company, onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    maxEmployees: company.maxEmployees || 5,
+    manualSlots: company.manualSlots ?? (company.maxEmployees ?? 5) - (company.purchasedSlots ?? 0),
+    purchasedSlots: company.purchasedSlots ?? 0,
     planStatus: company.planStatus || 'active',
     pricePerEmployee: company.pricePerEmployee || 19.90,
     subscriptionExpiresAt: company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
   });
 
+  const totalSlots = Number(formData.manualSlots) + Number(formData.purchasedSlots);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const dataToSave: Partial<CompanyData> = {
-      maxEmployees: Number(formData.maxEmployees),
+      manualSlots: Number(formData.manualSlots),
+      purchasedSlots: Number(formData.purchasedSlots),
+      maxEmployees: totalSlots,
       planStatus: formData.planStatus as 'active' | 'inactive' | 'blocked',
       pricePerEmployee: Number(formData.pricePerEmployee),
       subscriptionExpiresAt: formData.subscriptionExpiresAt ? new Date(formData.subscriptionExpiresAt + 'T00:00:00').toISOString() : undefined,
@@ -202,13 +207,29 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
             <button onClick={onClose}><X className="text-slate-500 hover:text-white"/></button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <TechInput 
-              label="Limite de Funcionários"
-              type="number"
-              value={formData.maxEmployees}
-              onChange={e => setFormData({...formData, maxEmployees: parseInt(e.target.value) || 0})}
-              icon={<Users className="w-4 h-4"/>}
-            />
+            <div>
+                <div className="grid grid-cols-2 gap-4">
+                    <TechInput 
+                        label="Slots Comprados (Automático)"
+                        type="number"
+                        value={formData.purchasedSlots}
+                        icon={<Users className="w-4 h-4"/>}
+                        disabled
+                        className="opacity-60"
+                    />
+                    <TechInput 
+                        label="Slots Manuais (Bônus)"
+                        type="number"
+                        value={formData.manualSlots}
+                        onChange={e => setFormData({...formData, manualSlots: parseInt(e.target.value) || 0})}
+                        icon={<Users className="w-4 h-4"/>}
+                    />
+                </div>
+                <p className="text-right text-sm text-slate-400 mt-2 font-mono">
+                    Total Disponível: <span className="font-bold text-cyan-400">{totalSlots}</span>
+                </p>
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
                <TechInput 
                 label="Preço por Funcionário (R$)"
