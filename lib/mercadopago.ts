@@ -45,7 +45,7 @@ export async function processPixPayment(
   description: string
 ): Promise<PixPaymentResponse> {
   const accessToken = await getAccessToken();
-  const url = '/api/mp/v1/payments';
+  const url = `${window.location.origin}/api/mp/v1/payments`;
 
   const cleanCpf = cpf.replace(/\D/g, '');
   const numericAmount = Number(amount.toFixed(2));
@@ -99,7 +99,7 @@ export async function processPixPayment(
  */
 export async function checkPaymentStatus(paymentId: number): Promise<string> {
   const accessToken = await getAccessToken();
-  const url = `/api/mp/v1/payments/${paymentId}`;
+  const url = `${window.location.origin}/api/mp/v1/payments/${paymentId}`;
 
   const response = await fetch(url, {
     method: 'GET',
@@ -124,7 +124,7 @@ export async function checkPaymentStatus(paymentId: number): Promise<string> {
  */
 export async function processCardPayment(paymentData: any): Promise<any> {
   const accessToken = await getAccessToken();
-  const url = '/api/mp/v1/payments';
+  const url = `${window.location.origin}/api/mp/v1/payments`;
 
   const idempotencyKey = crypto.randomUUID();
 
