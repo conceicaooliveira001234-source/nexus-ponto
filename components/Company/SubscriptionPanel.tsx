@@ -7,6 +7,7 @@ import TechInput from '../ui/TechInput';
 import { Loader2, QrCode, Copy, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import QRCode from 'qrcode.react';
 import { playSound } from '../../lib/sounds';
+import CardPaymentModal from './CardPaymentModal';
 
 interface SubscriptionPanelProps {
   company: CompanyData | null;
@@ -23,6 +24,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ paymentId: number; qrCode: string; qrCodeBase64: string } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'cancelled' | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   const handlePaymentSuccess = useCallback(async (newEmployeeLimit: number) => {
     const newExpiryDate = new Date();
@@ -104,7 +106,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   };
 
   const handleCardPayment = async () => {
-    alert('Integração de cartão em breve via API');
+    setIsCardModalOpen(true);
     playSound.click();
   };
 
@@ -157,8 +159,20 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2 bg-slate-900/50 border border-slate-700 rounded-lg p-8">
+    <>
+      {isCardModalOpen && (
+        <CardPaymentModal
+          amount={Number((numEmployees * PRICE_PER_EMPLOYEE).toFixed(2))}
+          payerEmail={company!.email}
+          onClose={() => setIsCardModalOpen(false)}
+          onPaymentSuccess={() => {
+            setIsCardModalOpen(false);
+            handlePaymentSuccess(numEmployees);
+          }}
+        />
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-slate-900/50 border border-slate-700 rounded-lg p-8">
         <h2 className="text-2xl font-bold text-white mb-2">Gerenciar Assinatura</h2>
         <p className="text-slate-400 mb-6">Selecione o número de licenças e a forma de pagamento.</p>
         
@@ -245,6 +259,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
         {error && <p className="text-red-400 text-xs mt-2 text-center">{error}</p>}
       </div>
     </div>
+    </>
   );
 };
 
