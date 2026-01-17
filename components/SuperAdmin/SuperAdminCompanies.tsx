@@ -57,8 +57,20 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
           })
         );
 
-        setCompanies(companiesWithCounts as CompanyWithCount[]);
-        setFilteredCompanies(companiesWithCounts as CompanyWithCount[]);
+        // Ordenar por data de vencimento (mais próxima primeiro)
+        const sortedCompanies = (companiesWithCounts as CompanyWithCount[]).sort((a, b) => {
+          const getExpiryTime = (val: any) => {
+             // Se não tiver data, joga para o final (futuro distante)
+             if (!val) return 8640000000000000; 
+             const date = typeof val.toDate === 'function' ? val.toDate() : new Date(val);
+             return isNaN(date.getTime()) ? 8640000000000000 : date.getTime();
+          };
+          
+          return getExpiryTime(a.subscriptionExpiresAt) - getExpiryTime(b.subscriptionExpiresAt);
+        });
+
+        setCompanies(sortedCompanies);
+        setFilteredCompanies(sortedCompanies);
       } catch (error) {
         console.error("Error processing companies data:", error);
         showFeedback('error', 'Erro ao processar dados das empresas.');
