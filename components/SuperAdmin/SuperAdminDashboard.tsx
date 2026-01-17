@@ -11,9 +11,10 @@ import SuperAdminOverview from './SuperAdminOverview';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
+  onImpersonate: (company: CompanyData) => void;
 }
 
-const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) => {
+const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onImpersonate }) => {
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'COMPANIES' | 'SETTINGS'>('OVERVIEW');
   const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({
     mercadoPagoPublicKey: '',
@@ -119,7 +120,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
             <SuperAdminOverview />
           )}
           {activeTab === 'COMPANIES' && (
-            <SuperAdminCompanies />
+            <SuperAdminCompanies onImpersonate={onImpersonate} />
           )}
 
           {activeTab === 'SETTINGS' && (

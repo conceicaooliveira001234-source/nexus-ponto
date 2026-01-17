@@ -147,6 +147,11 @@ const App: React.FC = () => {
     setInstallPrompt(null);
   };
 
+  const handleImpersonate = (company: CompanyData) => {
+    setCurrentCompany(company);
+    setView('DASHBOARD_COMPANY');
+  };
+
   // Initial role selection from Landing Page
   const handleRoleSelect = (role: UserRole) => {
     if (role === UserRole.COMPANY) {
@@ -310,7 +315,7 @@ const App: React.FC = () => {
         );
 
       case 'DASHBOARD_SUPER_ADMIN':
-        return <SuperAdminDashboard onLogout={handleLogout} />;
+        return <SuperAdminDashboard onLogout={handleLogout} onImpersonate={handleImpersonate} />;
         
       default:
         return <LandingPage onSelect={handleRoleSelect} />;

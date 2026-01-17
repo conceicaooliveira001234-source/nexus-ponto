@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData } from '../../types';
-import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 
@@ -10,7 +10,11 @@ interface CompanyWithCount extends CompanyData {
   employeeCount: number;
 }
 
-const SuperAdminCompanies: React.FC = () => {
+interface SuperAdminCompaniesProps {
+  onImpersonate: (company: CompanyData) => void;
+}
+
+const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate }) => {
   const [companies, setCompanies] = useState<CompanyWithCount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
@@ -132,8 +136,18 @@ const SuperAdminCompanies: React.FC = () => {
                   <td className="px-6 py-4">{company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toLocaleDateString('pt-BR') : 'N/A'}</td>
                   <td className="px-6 py-4 text-right">
                     {isDeleting === company.uid ? <Loader2 className="w-5 h-5 animate-spin text-red-400 ml-auto" /> : (
-                      <div className="flex justify-end items-center gap-2">
-                        <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline">Editar</button>
+                      <div className="flex justify-end items-center gap-4">
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Acessar o painel de ${company.companyName}?`)) {
+                              onImpersonate(company);
+                            }
+                          }}
+                          className="font-medium text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1 text-xs"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Acessar
+                        </button>
+                        <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline text-xs">Editar</button>
                         <button onClick={() => setCompanyToDelete(company)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
                           <Trash2 className="w-4 h-4" />
                         </button>
