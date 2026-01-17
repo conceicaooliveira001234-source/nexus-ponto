@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { CompanyData } from '../../types';
-import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 
@@ -170,11 +170,28 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
   const [formData, setFormData] = useState({
     maxEmployees: company.maxEmployees || 5,
     planStatus: company.planStatus || 'active',
+    pricePerEmployee: company.pricePerEmployee || 19.90,
+    subscriptionExpiresAt: company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(company.uid!, { ...formData, maxEmployees: Number(formData.maxEmployees) });
+    
+    const dataToSave: Partial<CompanyData> = {
+      maxEmployees: Number(formData.maxEmployees),
+      planStatus: formData.planStatus as 'active' | 'inactive' | 'blocked',
+      pricePerEmployee: Number(formData.pricePerEmployee),
+      subscriptionExpiresAt: formData.subscriptionExpiresAt ? new Date(formData.subscriptionExpiresAt + 'T00:00:00').toISOString() : undefined,
+    };
+
+    // Auto-update status to active if a future expiry date is set for an inactive/blocked plan
+    if (dataToSave.subscriptionExpiresAt && new Date(dataToSave.subscriptionExpiresAt) > new Date()) {
+      if (dataToSave.planStatus === 'inactive' || dataToSave.planStatus === 'blocked') {
+        dataToSave.planStatus = 'active';
+      }
+    }
+    
+    onSave(company.uid!, dataToSave);
   };
 
   return (
@@ -192,6 +209,23 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
               onChange={e => setFormData({...formData, maxEmployees: parseInt(e.target.value) || 0})}
               icon={<Users className="w-4 h-4"/>}
             />
+            <div className="grid grid-cols-2 gap-4">
+               <TechInput 
+                label="Preço por Funcionário (R$)"
+                type="number"
+                step="0.01"
+                value={formData.pricePerEmployee}
+                onChange={e => setFormData({...formData, pricePerEmployee: parseFloat(e.target.value) || 0})}
+                icon={<DollarSign className="w-4 h-4"/>}
+              />
+              <TechInput 
+                label="Validade da Assinatura"
+                type="date"
+                value={formData.subscriptionExpiresAt}
+                onChange={e => setFormData({...formData, subscriptionExpiresAt: e.target.value})}
+                icon={<Calendar className="w-4 h-4"/>}
+              />
+            </div>
             <div>
               <label className="text-xs font-mono text-cyan-400 tracking-wider uppercase ml-1">Status do Plano</label>
               <select 
