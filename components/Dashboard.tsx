@@ -5,6 +5,7 @@ import {
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
   AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff, CreditCard
 } from 'lucide-react';
+import { differenceInDays } from 'date-fns';
 import TechBackground from './TechBackground';
 import TechInput from './ui/TechInput';
 import SubscriptionPanel from './Company/SubscriptionPanel';
@@ -2384,6 +2385,54 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             {renderSidebarItem('BILLING', 'Financeiro', <CreditCard className="w-4 h-4" />)}
             {renderSidebarItem('SETTINGS', 'Configurações', <Settings className="w-4 h-4" />)}
           </nav>
+          
+          {(() => {
+            if (!companyDetails) return null;
+
+            const employeeCount = employees.length;
+            const maxEmployees = companyDetails.maxEmployees ?? 0;
+            const progress = maxEmployees > 0 ? Math.min((employeeCount / maxEmployees) * 100, 100) : 0;
+            
+            let daysRemaining: number | null = null;
+            let expiryDateStr = 'N/A';
+            let isNearExpiry = false;
+
+            if (companyDetails.subscriptionExpiresAt) {
+                const expiry = companyDetails.subscriptionExpiresAt as any;
+                const expiryDate = typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry);
+                daysRemaining = differenceInDays(expiryDate, new Date());
+                expiryDateStr = expiryDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                isNearExpiry = daysRemaining !== null && daysRemaining <= 5;
+            }
+
+            return (
+                <div className="p-4 m-4 mt-auto border border-slate-800 bg-slate-900/50 backdrop-blur-sm rounded-xl text-xs space-y-2">
+                    <h4 className="font-mono text-sm uppercase text-slate-300">Meu Plano</h4>
+                    <div>
+                        <div className="flex justify-between items-center mb-1 text-slate-400 font-mono">
+                            <span>Uso de Vagas</span>
+                            <span className="font-bold text-white">{employeeCount} / {maxEmployees}</span>
+                        </div>
+                        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div 
+                                className={`h-2 rounded-full transition-all duration-500 ${progress > 90 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`} 
+                                style={{ width: `${progress}%` }}
+                            ></div>
+                        </div>
+                        {(companyDetails.purchasedSlots !== undefined || companyDetails.manualSlots !== undefined) && (
+                            <p className="text-slate-500 text-[10px] text-right mt-1">
+                                ({companyDetails.purchasedSlots ?? 0} compradas + {companyDetails.manualSlots ?? 0} bônus)
+                            </p>
+                        )}
+                    </div>
+                    <div>
+                        <p className={`font-mono ${isNearExpiry && !isSubscriptionExpired ? 'text-amber-400 animate-pulse' : 'text-slate-400'} ${isSubscriptionExpired ? 'text-red-400 font-bold' : ''}`}>
+                            {isSubscriptionExpired ? 'Assinatura Expirada' : `Expira em: ${expiryDateStr}`}
+                        </p>
+                    </div>
+                </div>
+            );
+          })()}
 
           <div className="p-4 border-t border-slate-800">
             <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-mono uppercase">
