@@ -155,6 +155,23 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
       </aside>
 
       <main className="relative z-10 flex-1 h-screen overflow-y-auto">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+          <h2 className="font-tech text-lg text-fuchsia-400">SUPER ADMIN</h2>
+          <button onClick={onLogout} className="text-slate-400 hover:text-white">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Mobile Nav */}
+        <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-900 border-b border-slate-800">
+            <button onClick={() => setActiveTab('COMPANIES')} className={`px-4 py-2 rounded text-xs font-mono uppercase ${activeTab === 'COMPANIES' ? 'bg-fuchsia-600 text-white' : 'text-slate-400'}`}>
+                Empresas
+            </button>
+            <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-2 rounded text-xs font-mono uppercase ${activeTab === 'SETTINGS' ? 'bg-fuchsia-600 text-white' : 'text-slate-400'}`}>
+                Configurações
+            </button>
+        </div>
         <div className="p-6 md:p-12 max-w-7xl mx-auto">
           {activeTab === 'COMPANIES' && (
             <div>
