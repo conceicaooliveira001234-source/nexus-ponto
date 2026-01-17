@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initMercadoPago, Payment } from '@mercadopago/sdk-react';
 import { getPublicKey, processCardPayment } from '../../lib/mercadopago';
 import { X, Loader2, AlertTriangle } from 'lucide-react';
@@ -68,27 +68,27 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
     };
   }, []);
 
-  const initialization = {
+  const initialization = useMemo(() => ({
     amount: Number(amount),
     payer: {
       email: payerEmail || 'cliente@nexuswork.com.br',
-      entity_type: 'individual',
+      entity_type: 'individual' as const,
       identification: {
           type: 'CPF',
           number: '12345678909'
       }
     },
-  };
+  }), [amount, payerEmail]);
 
-  const customization = {
+  const customization = useMemo(() => ({
     visual: { style: { theme: 'dark' as const } },
     paymentMethods: {
       creditCard: 'all' as const,
       debitCard: 'all' as const,
     }
-  };
+  }), []);
 
-  const onSubmit = async (formData: any) => {
+  const onSubmit = useCallback(async (formData: any) => {
     setIsLoading(true);
     setError('');
     try {
@@ -106,20 +106,20 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
       setIsLoading(false);
       return Promise.reject();
     }
-  };
+  }, [onPaymentSuccess]);
 
-  const onBrickError = (err: any) => {
+  const onBrickError = useCallback((err: any) => {
     console.error('Erro no componente Brick do Mercado Pago:', err);
     setError('Ocorreu um erro no formulário de pagamento. Por favor, verifique os dados e tente novamente.');
     setIsInitializing(false);
     setIsBrickReady(false);
-  };
+  }, []);
 
-  const onBrickReady = () => {
+  const onBrickReady = useCallback(() => {
     console.log("Brick Carregado com Sucesso - Cancelando Timeout");
     setIsLoading(false);
     setIsInitializing(false);
-  };
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
