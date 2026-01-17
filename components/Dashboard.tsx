@@ -2362,6 +2362,66 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
     </button>
   );
 
+  // Helper function to render Plan Info (reused in Desktop Sidebar and Mobile Menu)
+  const renderPlanInfo = (className = "") => {
+    if (!companyDetails) return null;
+
+    const employeeCount = employees.length;
+    const maxEmployees = companyDetails.maxEmployees ?? 0;
+    const progress = maxEmployees > 0 ? Math.min((employeeCount / maxEmployees) * 100, 100) : 0;
+    
+    const now = new Date();
+    const formatDate = (date: Date) => date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    const parseExpiry = (expiry: any): Date | null => {
+        if (!expiry) return null;
+        return typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry);
+    };
+
+    const purchasedExpiryDate = parseExpiry(companyDetails.purchasedExpiresAt);
+    const manualExpiryDate = parseExpiry(companyDetails.manualExpiresAt);
+
+    const isPurchasedExpired = purchasedExpiryDate ? purchasedExpiryDate < now : true;
+    const isManualExpired = manualExpiryDate ? manualExpiryDate < now : true;
+
+    const mainExpiryDate = parseExpiry(companyDetails.subscriptionExpiresAt);
+    const daysRemaining = mainExpiryDate ? differenceInDays(mainExpiryDate, now) : null;
+    const isNearExpiry = daysRemaining !== null && daysRemaining <= 5;
+    
+    return (
+        <div className={`p-4 border border-slate-800 bg-slate-900/50 backdrop-blur-sm rounded-xl text-xs space-y-3 ${className}`}>
+            <h4 className="font-mono text-sm uppercase text-slate-300">Meu Plano</h4>
+            <div>
+                <div className="flex justify-between items-center mb-1 text-slate-400 font-mono">
+                    <span>Uso de Vagas</span>
+                    <span className="font-bold text-white">{employeeCount} / {maxEmployees}</span>
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                    <div 
+                        className={`h-2 rounded-full transition-all duration-500 ${progress > 90 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`} 
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+            </div>
+            <div className="space-y-1 pt-2 border-t border-slate-800/50 text-[11px] font-mono">
+                 <div className={`flex justify-between items-center ${isPurchasedExpired && (companyDetails.purchasedSlots ?? 0) > 0 ? 'text-red-500 line-through' : 'text-slate-400'}`}>
+                    <span>🛒 Plano: {companyDetails.purchasedSlots ?? 0} vagas</span>
+                    <span>Vence: {purchasedExpiryDate ? formatDate(purchasedExpiryDate) : 'N/A'}</span>
+                 </div>
+                 <div className={`flex justify-between items-center ${isManualExpired && (companyDetails.manualSlots ?? 0) > 0 ? 'text-red-500 line-through' : 'text-slate-400'}`}>
+                    <span>🎁 Bônus: {companyDetails.manualSlots ?? 0} vagas</span>
+                    <span>Vence: {manualExpiryDate ? formatDate(manualExpiryDate) : 'N/A'}</span>
+                 </div>
+            </div>
+             <div>
+                <p className={`font-mono text-center pt-2 border-t border-slate-800/50 ${isNearExpiry && !isSubscriptionExpired ? 'text-amber-400 animate-pulse' : 'text-slate-400'} ${isSubscriptionExpired ? 'text-red-400 font-bold' : ''}`}>
+                    {isSubscriptionExpired ? 'Assinatura Expirada' : `Validade Geral: ${mainExpiryDate ? formatDate(mainExpiryDate) : 'N/A'}`}
+                </p>
+            </div>
+        </div>
+    );
+  };
+
   // -- RENDER: ADMIN DASHBOARD --
   if (isCompany) {
     return (
@@ -2388,64 +2448,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
             {renderSidebarItem('SETTINGS', 'Configurações', <Settings className="w-4 h-4" />)}
           </nav>
           
-          {(() => {
-            if (!companyDetails) return null;
-
-            const employeeCount = employees.length;
-            const maxEmployees = companyDetails.maxEmployees ?? 0;
-            const progress = maxEmployees > 0 ? Math.min((employeeCount / maxEmployees) * 100, 100) : 0;
-            
-            const now = new Date();
-            const formatDate = (date: Date) => date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            
-            const parseExpiry = (expiry: any): Date | null => {
-                if (!expiry) return null;
-                return typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry);
-            };
-
-            const purchasedExpiryDate = parseExpiry(companyDetails.purchasedExpiresAt);
-            const manualExpiryDate = parseExpiry(companyDetails.manualExpiresAt);
-
-            const isPurchasedExpired = purchasedExpiryDate ? purchasedExpiryDate < now : true;
-            const isManualExpired = manualExpiryDate ? manualExpiryDate < now : true;
-
-            const mainExpiryDate = parseExpiry(companyDetails.subscriptionExpiresAt);
-            const daysRemaining = mainExpiryDate ? differenceInDays(mainExpiryDate, now) : null;
-            const isNearExpiry = daysRemaining !== null && daysRemaining <= 5;
-            
-            return (
-                <div className="p-4 m-4 mt-auto border border-slate-800 bg-slate-900/50 backdrop-blur-sm rounded-xl text-xs space-y-3">
-                    <h4 className="font-mono text-sm uppercase text-slate-300">Meu Plano</h4>
-                    <div>
-                        <div className="flex justify-between items-center mb-1 text-slate-400 font-mono">
-                            <span>Uso de Vagas</span>
-                            <span className="font-bold text-white">{employeeCount} / {maxEmployees}</span>
-                        </div>
-                        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-                            <div 
-                                className={`h-2 rounded-full transition-all duration-500 ${progress > 90 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`} 
-                                style={{ width: `${progress}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                    <div className="space-y-1 pt-2 border-t border-slate-800/50 text-[11px] font-mono">
-                         <div className={`flex justify-between items-center ${isPurchasedExpired && (companyDetails.purchasedSlots ?? 0) > 0 ? 'text-red-500 line-through' : 'text-slate-400'}`}>
-                            <span>🛒 Plano: {companyDetails.purchasedSlots ?? 0} vagas</span>
-                            <span>Vence: {purchasedExpiryDate ? formatDate(purchasedExpiryDate) : 'N/A'}</span>
-                         </div>
-                         <div className={`flex justify-between items-center ${isManualExpired && (companyDetails.manualSlots ?? 0) > 0 ? 'text-red-500 line-through' : 'text-slate-400'}`}>
-                            <span>🎁 Bônus: {companyDetails.manualSlots ?? 0} vagas</span>
-                            <span>Vence: {manualExpiryDate ? formatDate(manualExpiryDate) : 'N/A'}</span>
-                         </div>
-                    </div>
-                     <div>
-                        <p className={`font-mono text-center pt-2 border-t border-slate-800/50 ${isNearExpiry && !isSubscriptionExpired ? 'text-amber-400 animate-pulse' : 'text-slate-400'} ${isSubscriptionExpired ? 'text-red-400 font-bold' : ''}`}>
-                            {isSubscriptionExpired ? 'Assinatura Expirada' : `Validade Geral: ${mainExpiryDate ? formatDate(mainExpiryDate) : 'N/A'}`}
-                        </p>
-                    </div>
-                </div>
-            );
-          })()}
+          {renderPlanInfo("m-4 mt-auto")}
 
           <div className="p-4 border-t border-slate-800">
             <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-mono uppercase">
@@ -2903,7 +2906,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                       )}
 
                       {/* Employee Grid */}
-                      <div className="bg-slate-950/30 p-4 rounded-b-xl min-h-[400px]">
+                      <div className="bg-slate-900/30 p-4 rounded-b-xl min-h-[400px]">
                         {(() => {
                           const filteredEmployees = employees.filter(e => e.locationIds?.includes(activeLocationTab));
                           if (!activeLocationTab) return <div className="text-center text-slate-500 py-10">Selecione um local acima.</div>;
@@ -3081,6 +3084,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                      <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
                   </div>
                   
+                  {renderPlanInfo("mb-6")}
+
                   <div className="grid grid-cols-2 gap-4">
                      <button onClick={() => { handleTabChange('BILLING'); setIsMobileMenuOpen(false); }} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-green-500/30 bg-slate-950/50 text-green-400 hover:bg-green-500/10 transition-all">
                         <CreditCard className="w-8 h-8" />
