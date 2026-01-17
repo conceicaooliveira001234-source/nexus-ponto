@@ -459,24 +459,31 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            <fieldset className="border-2 border-cyan-500/30 p-4 rounded-lg space-y-4">
-              <legend className="px-2 font-mono text-cyan-400 text-sm">Plano Contratado (Automático)</legend>
+            <fieldset className="border-2 border-cyan-500/30 p-4 rounded-lg space-y-4 bg-slate-950/30">
+              <legend className="px-2 font-mono text-cyan-400 text-sm flex items-center gap-2">
+                 Plano Contratado (Automático)
+              </legend>
               <div className="grid grid-cols-2 gap-4">
                 <TechInput 
                   label="Qtd. Comprada"
                   type="number"
                   value={formData.purchasedSlots}
-                  onChange={e => setFormData({...formData, purchasedSlots: parseInt(e.target.value) || 0})}
+                  readOnly
+                  className="opacity-60 cursor-not-allowed"
                   icon={<Users className="w-4 h-4"/>}
                 />
                 <TechInput 
                   label="Vence em"
                   type="date"
                   value={formData.purchasedExpiresAt}
-                  onChange={e => setFormData({...formData, purchasedExpiresAt: e.target.value})}
+                  readOnly
+                  className="opacity-60 cursor-not-allowed"
                   icon={<Calendar className="w-4 h-4"/>}
                 />
               </div>
+              <p className="text-[10px] text-slate-500 text-center italic">
+                Gerenciado automaticamente pelo sistema de pagamentos.
+              </p>
             </fieldset>
 
             <fieldset className="border-2 border-fuchsia-500/30 p-4 rounded-lg space-y-4">
