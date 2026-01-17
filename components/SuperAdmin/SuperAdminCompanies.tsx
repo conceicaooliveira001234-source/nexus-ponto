@@ -287,9 +287,11 @@ const CompanyDetails: React.FC<{ company: CompanyWithCount, onImpersonate: (c: C
     return () => unsubscribe();
   }, [company.uid]);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const formatDate = (dateVal: any) => {
+    if (!dateVal) return 'N/A';
+    const date = typeof dateVal.toDate === 'function' ? dateVal.toDate() : new Date(dateVal);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
   
   const now = new Date();
@@ -405,26 +407,38 @@ const CompanyDetails: React.FC<{ company: CompanyWithCount, onImpersonate: (c: C
 };
 
 const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onSave: (id: string, data: Partial<CompanyData>) => void}> = ({ company, onClose, onSave }) => {
+  // Helper to safely parse date from Firestore (Timestamp or String)
+  const parseDate = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    if (typeof dateVal.toDate === 'function') return dateVal.toDate();
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   // Initialize with strings for editable numeric fields to handle empty input better
-  const [formData, setFormData] = useState({
-    purchasedSlots: company.purchasedSlots ?? 0,
-    purchasedExpiresAt: company.purchasedExpiresAt ? new Date(company.purchasedExpiresAt).toISOString().split('T')[0] : '',
-    manualSlots: (company.manualSlots ?? 0).toString(),
-    manualExpiresAt: company.manualExpiresAt ? new Date(company.manualExpiresAt).toISOString().split('T')[0] : '',
-    planStatus: company.planStatus || 'active',
-    pricePerEmployee: (company.pricePerEmployee || 19.90).toString(),
+  const [formData, setFormData] = useState(() => {
+    const mDate = parseDate(company.manualExpiresAt);
+    return {
+      manualSlots: (company.manualSlots ?? 0).toString(),
+      manualExpiresAt: mDate ? mDate.toISOString().split('T')[0] : '',
+      planStatus: company.planStatus || 'active',
+      pricePerEmployee: (company.pricePerEmployee || 19.90).toString(),
+    };
   });
 
   const toDate = (dateString: string) => dateString ? new Date(dateString + 'T00:00:00') : null;
   
   const now = new Date();
-  const purchasedDate = toDate(formData.purchasedExpiresAt);
-  const manualDate = toDate(formData.manualExpiresAt);
+  
+  // Data from props (Read-only / Automatic)
+  const purchasedDate = parseDate(company.purchasedExpiresAt);
+  const currentPurchasedSlots = company.purchasedSlots ?? 0;
 
-  // Parse strings to numbers for calculation
-  const currentPurchasedSlots = Number(formData.purchasedSlots);
+  // Data from form (Editable)
+  const manualDate = toDate(formData.manualExpiresAt);
   const currentManualSlots = Number(formData.manualSlots) || 0;
 
+  // Calculations
   const validPurchasedSlots = purchasedDate && purchasedDate > now ? currentPurchasedSlots : 0;
   const validManualSlots = manualDate && manualDate > now ? currentManualSlots : 0;
   const totalValidSlots = validPurchasedSlots + validManualSlots;
@@ -433,14 +447,30 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
     e.preventDefault();
 
     let latestExpiry: Date | null = null;
-    if (purchasedDate) latestExpiry = purchasedDate;
-    if (manualDate && (!latestExpiry || manualDate > latestExpiry)) {
-      latestExpiry = manualDate;
+    
+    // Determine latest expiry between purchased and manual
+    if (purchasedDate && purchasedDate > now) {
+        latestExpiry = purchasedDate;
+    }
+    
+    if (manualDate && manualDate > now) {
+        if (!latestExpiry || manualDate > latestExpiry) {
+            latestExpiry = manualDate;
+        }
+    }
+    
+    // If no valid future expiry, fallback to whatever is latest even if expired, or null
+    if (!latestExpiry) {
+         if (purchasedDate && manualDate) {
+             latestExpiry = purchasedDate > manualDate ? purchasedDate : manualDate;
+         } else if (purchasedDate) {
+             latestExpiry = purchasedDate;
+         } else if (manualDate) {
+             latestExpiry = manualDate;
+         }
     }
     
     const dataToSave: Partial<CompanyData> = {
-      purchasedSlots: currentPurchasedSlots,
-      purchasedExpiresAt: purchasedDate ? purchasedDate.toISOString() : undefined,
       manualSlots: currentManualSlots,
       manualExpiresAt: manualDate ? manualDate.toISOString() : undefined,
       maxEmployees: totalValidSlots,
@@ -465,33 +495,6 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            <fieldset className="border-2 border-cyan-500/30 p-4 rounded-lg space-y-4 bg-slate-950/30">
-              <legend className="px-2 font-mono text-cyan-400 text-sm flex items-center gap-2">
-                 Plano Contratado (Automático)
-              </legend>
-              <div className="grid grid-cols-2 gap-4">
-                <TechInput 
-                  label="Qtd. Comprada"
-                  type="number"
-                  value={formData.purchasedSlots}
-                  readOnly
-                  className="opacity-60 cursor-not-allowed"
-                  icon={<Users className="w-4 h-4"/>}
-                />
-                <TechInput 
-                  label="Vence em"
-                  type="date"
-                  value={formData.purchasedExpiresAt}
-                  readOnly
-                  className="opacity-60 cursor-not-allowed"
-                  icon={<Calendar className="w-4 h-4"/>}
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 text-center italic">
-                Gerenciado automaticamente pelo sistema de pagamentos.
-              </p>
-            </fieldset>
-
             <fieldset className="border-2 border-fuchsia-500/30 p-4 rounded-lg space-y-4">
               <legend className="px-2 font-mono text-fuchsia-400 text-sm">Bônus / Cortesia (Manual)</legend>
               <div className="grid grid-cols-2 gap-4">
@@ -512,6 +515,14 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
               </div>
             </fieldset>
             
+            <div className="flex justify-between items-center text-sm border-t border-slate-800 pt-4">
+                <span className="text-slate-400">Plano Contratado (Info):</span>
+                <span className="text-cyan-400 font-mono">
+                    {currentPurchasedSlots} vagas 
+                    {purchasedDate ? ` (Vence: ${purchasedDate.toLocaleDateString('pt-BR')})` : ''}
+                </span>
+            </div>
+
             <p className="text-right text-sm text-slate-400 font-mono">
                 Total de Vagas Válidas: <span className="font-bold text-cyan-400 text-base">{totalValidSlots}</span>
             </p>
