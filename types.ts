@@ -18,10 +18,12 @@ export interface CompanyData {
   email: string;
   password?: string; // Optional as we don't store it in Firestore
   tenantCode?: string; // Custom code created by the company
+  
+  // SaaS Fields
+  planStatus?: 'active' | 'inactive' | 'blocked';
   maxEmployees?: number;
-  planExpiresAt?: string; // ISO Date string
-  isBlocked?: boolean;
-  customPricePerEmployee?: number;
+  subscriptionExpiresAt?: string; // ISO Date string
+  pricePerEmployee?: number;
 }
 
 export interface SystemSettings {

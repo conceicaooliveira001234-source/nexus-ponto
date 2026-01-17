@@ -1234,6 +1234,40 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
       playSound.error(); // 🔊 SOM DE ERRO
       return;
     }
+
+    // SAAS PLAN & QUOTA CHECK (ONLY FOR NEW EMPLOYEES)
+    if (!editingEmployeeId && currentCompanyId) {
+      try {
+        const companyRef = doc(db, "companies", currentCompanyId);
+        const companySnap = await getDoc(companyRef);
+        if (companySnap.exists()) {
+          const companyData = companySnap.data() as CompanyData;
+          const currentCount = employees.length;
+
+          // 1. Check Plan Status
+          if (companyData.planStatus === 'blocked') {
+            alert('❌ Acesso bloqueado. Não é possível adicionar funcionários. Entre em contato com o suporte.');
+            return;
+          }
+
+          // 2. Check Subscription Expiry
+          if (companyData.subscriptionExpiresAt && new Date(companyData.subscriptionExpiresAt) < new Date()) {
+            alert('⚠️ Seu plano expirou. Renove a assinatura para adicionar novos funcionários.');
+            return;
+          }
+
+          // 3. Check Employee Quota
+          if (typeof companyData.maxEmployees === 'number' && currentCount >= companyData.maxEmployees) {
+            alert(`🚫 Limite do plano atingido (${currentCount}/${companyData.maxEmployees}). Para adicionar mais funcionários, faça um upgrade no seu plano.`);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Error checking company plan:", error);
+        showToast("Erro ao verificar as informações do plano. Tente novamente.", "error");
+        return;
+      }
+    }
     if (isProcessingPhoto) {
       showToast("Aguarde o processamento da foto.", "info");
       return;

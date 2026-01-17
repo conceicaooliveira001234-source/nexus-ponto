@@ -6,6 +6,7 @@ import { ArrowLeft, Building2, Cog, Users, X, Save, Edit, CheckCircle, XCircle, 
 import TechBackground from '../TechBackground';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
+import SuperAdminCompanies from './SuperAdminCompanies';
 
 interface SuperAdminDashboardProps {
   onLogout: () => void;
@@ -174,53 +175,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
         </div>
         <div className="p-6 md:p-12 max-w-7xl mx-auto">
           {activeTab === 'COMPANIES' && (
-            <div>
-              <h1 className="font-tech text-3xl text-white mb-6">Gerenciamento de Empresas</h1>
-              {renderFeedback()}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-lg overflow-x-auto">
-                <table className="w-full text-sm text-left text-slate-400">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 font-mono">
-                    <tr>
-                      <th scope="col" className="px-6 py-3">Empresa</th>
-                      <th scope="col" className="px-6 py-3">E-mail</th>
-                      <th scope="col" className="px-6 py-3">Funcionários</th>
-                      <th scope="col" className="px-6 py-3">Validade</th>
-                      <th scope="col" className="px-6 py-3">Status</th>
-                      <th scope="col" className="px-6 py-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {companies.map(company => {
-                      const isExpired = company.planExpiresAt && new Date(company.planExpiresAt) < new Date();
-                      const status = company.isBlocked ? 'Bloqueado' : isExpired ? 'Expirado' : 'Ativo';
-                      return (
-                        <tr key={company.uid} className="border-b border-slate-800 hover:bg-slate-800/30">
-                          <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">{company.companyName}</th>
-                          <td className="px-6 py-4">{company.email}</td>
-                          <td className="px-6 py-4">{company.maxEmployees || 0}</td>
-                          <td className="px-6 py-4">{company.planExpiresAt ? new Date(company.planExpiresAt).toLocaleDateString('pt-BR') : 'N/A'}</td>
-                          <td className={`px-6 py-4 font-bold ${status === 'Ativo' ? 'text-green-400' : 'text-red-400'}`}>{status}</td>
-                          <td className="px-6 py-4 text-right">
-                            {isDeleting === company.uid ? (
-                              <div className="flex justify-end">
-                                <Loader2 className="w-5 h-5 animate-spin text-red-400" />
-                              </div>
-                            ) : (
-                              <div className="flex justify-end items-center gap-2">
-                                <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline">Editar</button>
-                                <button onClick={() => setCompanyToDelete(company)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <SuperAdminCompanies />
           )}
 
           {activeTab === 'SETTINGS' && (
