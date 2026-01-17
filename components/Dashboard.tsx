@@ -1256,6 +1256,13 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
         companyId: currentCompanyId
       };
 
+      // Sanitize shifts array to remove undefined values before saving to Firestore
+      employeeData.shifts = employeeData.shifts.map(shift => ({
+        ...shift,
+        breakTime: shift.breakTime || '',
+        breakEndTime: shift.breakEndTime || ''
+      }));
+
       if (editingEmployeeId) {
         // UPDATE
         await updateDoc(doc(db, "employees", editingEmployeeId), employeeData);
