@@ -24,6 +24,8 @@ export interface CompanyData {
   maxEmployees?: number;
   subscriptionExpiresAt?: string; // ISO Date string
   pricePerEmployee?: number;
+  purchasedSlots?: number;
+  manualSlots?: number;
 }
 
 export interface SystemSettings {
