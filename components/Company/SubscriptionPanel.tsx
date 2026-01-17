@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CompanyData } from '../../types';
 import { db } from '../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { processPixPayment, checkPaymentStatus } from '../../lib/mercadopago';
 import TechInput from '../ui/TechInput';
 import { Loader2, QrCode, Copy, CheckCircle } from 'lucide-react';
@@ -23,15 +23,30 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   const [pixData, setPixData] = useState<{ paymentId: number; qrCode: string; qrCodeBase64: string } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'cancelled' | null>(null);
 
-  const handlePaymentSuccess = useCallback(async (newEmployeeLimit: number) => {
+  const handlePaymentSuccess = useCallback(async (newPurchasedSlots: number) => {
     const newExpiryDate = new Date();
     newExpiryDate.setDate(newExpiryDate.getDate() + 30);
 
     try {
-      await updateDoc(doc(db, 'companies', companyId), {
-        maxEmployees: newEmployeeLimit,
-        planExpiresAt: newExpiryDate.toISOString(),
-        isBlocked: false,
+      // 1. Get current company data to preserve manualSlots
+      const companyRef = doc(db, 'companies', companyId);
+      const companySnap = await getDoc(companyRef);
+      if (!companySnap.exists()) {
+        throw new Error("Empresa não encontrada.");
+      }
+      const currentData = companySnap.data() as CompanyData;
+      const existingManualSlots = currentData.manualSlots || 0;
+      
+      // 2. Calculate new total
+      const newTotal = newPurchasedSlots + existingManualSlots;
+
+      // 3. Update doc in Firestore
+      await updateDoc(companyRef, {
+        purchasedSlots: newPurchasedSlots,
+        manualSlots: existingManualSlots, // ensure it's preserved
+        maxEmployees: newTotal,
+        subscriptionExpiresAt: newExpiryDate.toISOString(),
+        planStatus: 'active',
       });
       setPaymentStatus('approved');
       playSound.success();
