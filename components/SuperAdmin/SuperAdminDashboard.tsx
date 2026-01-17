@@ -14,25 +14,15 @@ interface SuperAdminDashboardProps {
 
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<'COMPANIES' | 'SETTINGS'>('COMPANIES');
-  const [companies, setCompanies] = useState<CompanyData[]>([]);
   const [paymentSettings, setPaymentSettings] = useState<SystemSettings>({
     mercadoPagoPublicKey: '',
     mercadoPagoAccessToken: '',
   });
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [settingsBeforeEdit, setSettingsBeforeEdit] = useState<SystemSettings>({});
-  const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track companyId being deleted
-  const [companyToDelete, setCompanyToDelete] = useState<CompanyData | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   useEffect(() => {
-    // Listener for all companies
-    const unsubCompanies = onSnapshot(collection(db, 'companies'), (snapshot) => {
-      const allCompanies = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as CompanyData));
-      setCompanies(allCompanies);
-    });
-
     // Listener for payment settings
     const settingsDocRef = doc(db, 'system_settings', 'payment_config');
     const unsubSettings = onSnapshot(settingsDocRef, (docSnap) => {
@@ -48,7 +38,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
     });
 
     return () => {
-      unsubCompanies();
       unsubSettings();
     };
   }, []);
@@ -77,61 +66,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
       <span>{feedbackMessage.text}</span>
     </div>
   );
-
-  const handleUpdateCompany = async (companyId: string, data: Partial<CompanyData>) => {
-    setFeedbackMessage(null);
-    try {
-      await updateDoc(doc(db, 'companies', companyId), data);
-      setEditingCompany(null);
-      playSound.success();
-      setFeedbackMessage({ type: 'success', text: 'Empresa atualizada com sucesso!' });
-      setTimeout(() => setFeedbackMessage(null), 3000);
-    } catch (error) {
-      console.error('Error updating company:', error);
-      setFeedbackMessage({ type: 'error', text: 'Erro ao atualizar empresa.' });
-      setTimeout(() => setFeedbackMessage(null), 3000);
-    }
-  };
-
-  const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    setFeedbackMessage(null);
-    setIsDeleting(companyId);
-    try {
-      const batch = writeBatch(db);
-
-      // Collections to cascade delete from
-      const collectionsToDelete = ['employees', 'locations', 'shifts', 'attendance'];
-      
-      for (const collectionName of collectionsToDelete) {
-        const q = query(collection(db, collectionName), where('companyId', '==', companyId));
-        const snapshot = await getDocs(q);
-        snapshot.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-        console.log(`[CASCADE DELETE] ${snapshot.size} documents from '${collectionName}' will be deleted for company ${companyId}.`);
-      }
-
-      // Delete the company document itself
-      const companyRef = doc(db, 'companies', companyId);
-      batch.delete(companyRef);
-
-      // Commit all deletions at once
-      await batch.commit();
-
-      setFeedbackMessage({ type: 'success', text: `Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.` });
-      setTimeout(() => setFeedbackMessage(null), 5000);
-      playSound.success();
-      
-    } catch (error) {
-      console.error('Error performing cascade delete:', error);
-      setFeedbackMessage({ type: 'error', text: 'Erro ao excluir a empresa e seus dados.' });
-      setTimeout(() => setFeedbackMessage(null), 5000);
-      playSound.error();
-    } finally {
-      setIsDeleting(null);
-      setCompanyToDelete(null);
-    }
-  };
 
   return (
     <div className="relative min-h-screen flex">
@@ -236,112 +170,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout }) =
           )}
         </div>
       </main>
-
-      {/* Company Edit Modal */}
-      {editingCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <CompanyEditModal 
-            company={editingCompany}
-            onClose={() => setEditingCompany(null)}
-            onSave={handleUpdateCompany}
-          />
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {companyToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] relative">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
-                <Trash2 className="w-6 h-6 text-red-400"/>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white mb-1">Confirmar Exclusão</h2>
-                <p className="text-slate-400 text-sm">
-                  Tem certeza que deseja excluir permanentemente a empresa <strong>{companyToDelete.companyName}</strong> e todos os seus dados associados (funcionários, locais, turnos e registros de ponto)?
-                </p>
-                <p className="text-amber-400 text-xs mt-2 font-bold uppercase">Essa ação não pode ser desfeita.</p>
-              </div>
-            </div>
-            
-            <div className="flex justify-end gap-4 mt-8">
-              <button 
-                onClick={() => setCompanyToDelete(null)}
-                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-lg"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => handleDeleteCompany(companyToDelete.uid!, companyToDelete.companyName)}
-                className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-sm rounded-lg flex items-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Excluir Permanentemente
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
-
-// Sub-component for the modal
-const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onSave: (id: string, data: Partial<CompanyData>) => void}> = ({ company, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    maxEmployees: company.maxEmployees || 0,
-    planExpiresAt: company.planExpiresAt ? company.planExpiresAt.split('T')[0] : '',
-    isBlocked: company.isBlocked || false,
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const dataToSave: Partial<CompanyData> = {
-      maxEmployees: Number(formData.maxEmployees),
-      isBlocked: formData.isBlocked,
-      planExpiresAt: formData.planExpiresAt ? new Date(formData.planExpiresAt).toISOString() : new Date(0).toISOString(),
-    };
-    onSave(company.uid!, dataToSave);
-  };
-
-  return (
-    <div className="bg-slate-900 border border-fuchsia-500/30 rounded-2xl p-8 max-w-lg w-full shadow-lg animate-in fade-in zoom-in-95">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-white">Editar {company.companyName}</h2>
-        <button onClick={onClose}><X className="text-slate-500 hover:text-white"/></button>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <TechInput 
-          label="Limite de Funcionários"
-          type="number"
-          value={formData.maxEmployees}
-          onChange={e => setFormData({...formData, maxEmployees: parseInt(e.target.value) || 0})}
-          icon={<Users className="w-4 h-4"/>}
-        />
-        <TechInput 
-          label="Expiração do Plano"
-          type="date"
-          value={formData.planExpiresAt}
-          onChange={e => setFormData({...formData, planExpiresAt: e.target.value})}
-        />
-        <div className="flex items-center justify-between bg-slate-800/50 p-4 rounded-lg">
-           <label className="font-bold text-white">Bloquear Acesso</label>
-           <button
-             type="button"
-             onClick={() => setFormData(f => ({...f, isBlocked: !f.isBlocked}))}
-             className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 ${formData.isBlocked ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
-           >
-             {formData.isBlocked ? <><XCircle className="w-4 h-4"/> Bloqueado</> : <><CheckCircle className="w-4 h-4"/> Ativo</>}
-           </button>
-        </div>
-        <div className="flex justify-end gap-4 pt-4 border-t border-slate-800">
-          <button type="button" onClick={onClose} className="px-6 py-2 bg-slate-700 text-white font-bold rounded-lg">Cancelar</button>
-          <button type="submit" className="px-6 py-2 bg-fuchsia-600 text-white font-bold rounded-lg">Salvar</button>
-        </div>
-      </form>
-    </div>
-  );
-}
 
 export default SuperAdminDashboard;
