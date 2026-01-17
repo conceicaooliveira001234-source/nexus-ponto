@@ -72,9 +72,11 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
     amount: Number(amount),
     payer: {
       email: payerEmail || 'cliente@nexuswork.com.br',
-      entity_type: 'individual' as const,
-      first_name: 'Cliente',
-      last_name: 'Nexus',
+      entity_type: 'individual',
+      identification: {
+          type: 'CPF',
+          number: '12345678909'
+      }
     },
   };
 
