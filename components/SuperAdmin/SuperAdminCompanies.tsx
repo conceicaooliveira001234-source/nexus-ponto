@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { CompanyData } from '../../types';
-import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar } from 'lucide-react';
+import { collection, onSnapshot, doc, updateDoc, query, where, getDocs, writeBatch, orderBy, limit } from 'firebase/firestore';
+import { CompanyData, Transaction } from '../../types';
+import { Loader2, Edit, X, Save, Users, CheckCircle, XCircle, Trash2, AlertTriangle, ExternalLink, DollarSign, Calendar, ChevronDown, ChevronUp, ShoppingBag, Award, FilePieChart, History, Mail, Phone, ClipboardCopy } from 'lucide-react';
 import TechInput from '../ui/TechInput';
 import { playSound } from '../../lib/sounds';
 
