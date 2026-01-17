@@ -491,7 +491,9 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
       pricePerEmployee: Number(formData.pricePerEmployee) || 0,
     };
 
-    if (latestExpiry && latestExpiry > now && (dataToSave.planStatus === 'inactive' || dataToSave.planStatus === 'blocked')) {
+    // Auto-activate only if it was inactive and date is valid. 
+    // Do NOT auto-activate if it is blocked.
+    if (latestExpiry && latestExpiry > now && dataToSave.planStatus === 'inactive') {
       dataToSave.planStatus = 'active';
     }
     

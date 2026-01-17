@@ -7,6 +7,7 @@ import EmployeeLogin from './components/auth/EmployeeLogin';
 import FacialOnboarding from './components/auth/FacialOnboarding';
 import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation, DashboardTab } from './types';
 import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
+import CompanyBlocked from './components/Company/CompanyBlocked';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
@@ -88,9 +89,8 @@ const App: React.FC = () => {
 
             // SaaS Subscription/Block Check
             if (data.planStatus === 'blocked') {
-              alert('Sua conta está bloqueada. Entre em contato com o suporte.');
-              await signOut(auth);
-              setView('LANDING');
+              setCurrentCompany({ ...data, uid: user.uid });
+              setView('COMPANY_BLOCKED');
               setIsLoading(false);
               return;
             }
@@ -345,6 +345,9 @@ const App: React.FC = () => {
 
       case 'DASHBOARD_SUPER_ADMIN':
         return <SuperAdminDashboard onLogout={handleLogout} onImpersonate={handleImpersonate} />;
+      
+      case 'COMPANY_BLOCKED':
+        return <CompanyBlocked onLogout={handleLogout} />;
         
       default:
         return <LandingPage onSelect={handleRoleSelect} />;
