@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CompanyData } from '../../types';
 import { db } from '../../lib/firebase';
-import { doc, updateDoc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { processPixPayment, checkPaymentStatus } from '../../lib/mercadopago';
 import TechInput from '../ui/TechInput';
 import { Loader2, QrCode, Copy, CheckCircle } from 'lucide-react';
@@ -26,6 +26,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   const handlePaymentSuccess = useCallback(async (newPurchasedSlots: number, transactionId: string) => {
     const newPurchasedExpiryDate = new Date();
     newPurchasedExpiryDate.setDate(newPurchasedExpiryDate.getDate() + 30);
+    const now = new Date();
 
     try {
       // 1. Get current company data to read manual slots info
@@ -39,7 +40,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
       const manualExpiresAt = currentData.manualExpiresAt ? new Date(currentData.manualExpiresAt) : null;
 
       // 2. Recalculate totals
-      const now = new Date();
       const validManualSlots = (manualExpiresAt && manualExpiresAt > now) ? existingManualSlots : 0;
       const newTotalEmployees = newPurchasedSlots + validManualSlots;
 
@@ -49,8 +49,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
       }
       
       // 3. Update company and transaction doc in Firestore
-      const transactionRef = doc(db, `companies/${companyId}/transactions`, transactionId);
       
+      // Atualiza a empresa com o novo plano
       await updateDoc(companyRef, {
         purchasedSlots: newPurchasedSlots,
         purchasedExpiresAt: newPurchasedExpiryDate.toISOString(),
@@ -59,10 +59,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
         subscriptionExpiresAt: latestExpiryDate.toISOString(),
       });
 
-      await updateDoc(transactionRef, {
-        status: 'approved',
-        approvedAt: now.toISOString(),
-      });
+      // Atualiza a transação para aprovada
+      if (transactionId) {
+        const transactionRef = doc(db, `companies/${companyId}/transactions`, transactionId);
+        await updateDoc(transactionRef, {
+          status: 'approved',
+          approvedAt: now.toISOString(),
+        });
+      }
 
       setPaymentStatus('approved');
       playSound.success();
@@ -110,25 +114,30 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
 
     try {
       const totalAmount = numEmployees * PRICE_PER_EMPLOYEE;
+      const description = `Compra de ${numEmployees} funcionários`;
+
+      // 1. Gera o PIX no Mercado Pago
       const response = await processPixPayment(
         totalAmount,
         company!.email,
         payerCpf,
-        `Compra de ${numEmployees} Slots`
+        description
       );
 
-      // Create transaction log
+      // 2. Cria o log da transação no Firestore como 'pending'
       const transactionData = {
         amount: totalAmount,
         status: 'pending',
         paymentMethod: 'pix',
         createdAt: new Date().toISOString(),
         externalReference: String(response.paymentId),
-        description: `Compra de ${numEmployees} Slots`,
+        description: description,
         companyId: companyId,
       };
+      
       const transactionRef = await addDoc(collection(db, `companies/${companyId}/transactions`), transactionData);
 
+      // 3. Salva os dados no estado para exibir o QR Code e iniciar o polling
       setPixData({ ...response, transactionId: transactionRef.id });
       setPaymentStatus('pending');
     } catch (err: any) {
