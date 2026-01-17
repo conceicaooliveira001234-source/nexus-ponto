@@ -10,7 +10,7 @@ import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
-import InstallButton from './components/InstallButton';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 const SUPER_ADMIN_EMAIL = 'admin@agentb.com';
 
@@ -21,6 +21,21 @@ const App: React.FC = () => {
   const [employeeIdForOnboarding, setEmployeeIdForOnboarding] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [initialDashboardTab, setInitialDashboardTab] = useState<DashboardTab | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+
+  // PWA Install Prompt Listener
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -113,6 +128,24 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  const handlePwaInstall = () => {
+    if (installPrompt) {
+      (installPrompt as any).prompt();
+      (installPrompt as any).userChoice.then((choiceResult: { outcome: string }) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the PWA installation');
+        } else {
+          console.log('User dismissed the PWA installation');
+        }
+        setInstallPrompt(null);
+      });
+    }
+  };
+
+  const handlePwaDismiss = () => {
+    setInstallPrompt(null);
+  };
 
   // Initial role selection from Landing Page
   const handleRoleSelect = (role: UserRole) => {
@@ -287,7 +320,13 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen w-full text-slate-100 overflow-hidden relative selection:bg-cyan-500/30">
       {renderView()}
-      <InstallButton />
+      {installPrompt && (
+        <PwaInstallPrompt
+          installPrompt={installPrompt}
+          onInstall={handlePwaInstall}
+          onDismiss={handlePwaDismiss}
+        />
+      )}
     </div>
   );
 };
