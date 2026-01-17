@@ -191,7 +191,10 @@ const App: React.FC = () => {
       console.error(error);
       let msg = "Erro ao fazer login.";
       if (error.code === 'auth/invalid-credential') msg = "E-mail ou senha incorretos.";
-      alert(msg);
+      if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado.";
+      if (error.code === 'auth/wrong-password') msg = "Senha incorreta.";
+      if (error.code === 'auth/too-many-requests') msg = "Muitas tentativas. Tente novamente mais tarde.";
+      throw new Error(msg);
     }
   };
 
