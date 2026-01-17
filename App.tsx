@@ -99,7 +99,8 @@ const App: React.FC = () => {
             const isExpired = expiry && (typeof expiry.toDate === 'function' ? expiry.toDate() : new Date(expiry)) < new Date();
 
             if (isExpired) {
-              alert('Seu plano expirou. Renove sua assinatura para continuar.');
+              // Removido alert para evitar "localhost diz"
+              // O usuário será redirecionado para a tela de pagamento onde verá o aviso
 
               // Auto-correção: se o plano expirou mas ainda está ativo, muda para inativo.
               if (data.planStatus === 'active') {

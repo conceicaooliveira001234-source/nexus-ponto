@@ -20,8 +20,8 @@ const CompanyBlocked: React.FC<CompanyBlockedProps> = ({ onLogout }) => {
           <h2 className="font-tech text-2xl font-bold text-white mb-4">Acesso Bloqueado</h2>
           
           <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-            O acesso ao painel da sua empresa foi temporariamente suspenso. 
-            Para regularizar sua situação ou obter mais informações, entre em contato com nosso suporte.
+            O acesso ao painel da sua empresa foi suspenso. 
+            Para regularizar sua situação, entre em contato com nosso suporte.
           </p>
 
           <a 
@@ -31,7 +31,7 @@ const CompanyBlocked: React.FC<CompanyBlockedProps> = ({ onLogout }) => {
             className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-4 rounded-xl shadow-lg flex items-center justify-center gap-3 transition-all transform hover:scale-105 mb-4"
           >
             <MessageCircle className="w-6 h-6" />
-            Falar com Suporte (WhatsApp)
+            Falar com Suporte
           </a>
 
           <button 
