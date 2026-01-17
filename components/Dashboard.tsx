@@ -1268,19 +1268,22 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
           // 1. Check Plan Status
           if (companyData.planStatus === 'blocked') {
-            alert('❌ Acesso bloqueado. Não é possível adicionar funcionários. Entre em contato com o suporte.');
+            showToast('❌ Acesso bloqueado. Não é possível adicionar funcionários. Entre em contato com o suporte.', 'error');
+            playSound.error();
             return;
           }
 
           // 2. Check Subscription Expiry
           if (companyData.subscriptionExpiresAt && new Date(companyData.subscriptionExpiresAt) < new Date()) {
-            alert('⚠️ Seu plano expirou. Renove a assinatura para adicionar novos funcionários.');
+            showToast('⚠️ Seu plano expirou. Renove a assinatura para adicionar novos funcionários.', 'error');
+            playSound.error();
             return;
           }
 
           // 3. Check Employee Quota
           if (typeof companyData.maxEmployees === 'number' && currentCount >= companyData.maxEmployees) {
-            alert(`🚫 Limite do plano atingido (${currentCount}/${companyData.maxEmployees}). Para adicionar mais funcionários, faça um upgrade no seu plano.`);
+            showToast(`🚫 Limite do plano atingido (${currentCount}/${companyData.maxEmployees}). Para adicionar mais funcionários, faça um upgrade no seu plano.`, 'error');
+            playSound.error();
             return;
           }
         }
@@ -2577,7 +2580,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                     <button 
                       onClick={() => {
                         if (companyDetails && typeof companyDetails.maxEmployees === 'number' && employees.length >= companyDetails.maxEmployees) {
-                          alert(`Limite do plano atingido (${employees.length}/${companyDetails.maxEmployees}). Contrate mais licenças ou entre em contato com o suporte.`);
+                          showToast(`Limite do plano atingido (${employees.length}/${companyDetails.maxEmployees}). Contrate mais licenças ou entre em contato com o suporte.`, 'error');
                           playSound.error();
                           return;
                         }
