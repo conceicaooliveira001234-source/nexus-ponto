@@ -404,13 +404,14 @@ const CompanyDetails: React.FC<{ company: CompanyWithCount, onImpersonate: (c: C
 };
 
 const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onSave: (id: string, data: Partial<CompanyData>) => void}> = ({ company, onClose, onSave }) => {
+  // Initialize with strings for editable numeric fields to handle empty input better
   const [formData, setFormData] = useState({
     purchasedSlots: company.purchasedSlots ?? 0,
     purchasedExpiresAt: company.purchasedExpiresAt ? new Date(company.purchasedExpiresAt).toISOString().split('T')[0] : '',
-    manualSlots: company.manualSlots ?? 0,
+    manualSlots: (company.manualSlots ?? 0).toString(),
     manualExpiresAt: company.manualExpiresAt ? new Date(company.manualExpiresAt).toISOString().split('T')[0] : '',
     planStatus: company.planStatus || 'active',
-    pricePerEmployee: company.pricePerEmployee || 19.90,
+    pricePerEmployee: (company.pricePerEmployee || 19.90).toString(),
   });
 
   const toDate = (dateString: string) => dateString ? new Date(dateString + 'T00:00:00') : null;
@@ -419,8 +420,12 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
   const purchasedDate = toDate(formData.purchasedExpiresAt);
   const manualDate = toDate(formData.manualExpiresAt);
 
-  const validPurchasedSlots = purchasedDate && purchasedDate > now ? Number(formData.purchasedSlots) : 0;
-  const validManualSlots = manualDate && manualDate > now ? Number(formData.manualSlots) : 0;
+  // Parse strings to numbers for calculation
+  const currentPurchasedSlots = Number(formData.purchasedSlots);
+  const currentManualSlots = Number(formData.manualSlots) || 0;
+
+  const validPurchasedSlots = purchasedDate && purchasedDate > now ? currentPurchasedSlots : 0;
+  const validManualSlots = manualDate && manualDate > now ? currentManualSlots : 0;
   const totalValidSlots = validPurchasedSlots + validManualSlots;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -433,14 +438,14 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
     }
     
     const dataToSave: Partial<CompanyData> = {
-      purchasedSlots: Number(formData.purchasedSlots),
+      purchasedSlots: currentPurchasedSlots,
       purchasedExpiresAt: purchasedDate ? purchasedDate.toISOString() : undefined,
-      manualSlots: Number(formData.manualSlots),
+      manualSlots: currentManualSlots,
       manualExpiresAt: manualDate ? manualDate.toISOString() : undefined,
       maxEmployees: totalValidSlots,
       subscriptionExpiresAt: latestExpiry ? latestExpiry.toISOString() : undefined,
       planStatus: formData.planStatus as 'active' | 'inactive' | 'blocked',
-      pricePerEmployee: Number(formData.pricePerEmployee),
+      pricePerEmployee: Number(formData.pricePerEmployee) || 0,
     };
 
     if (latestExpiry && latestExpiry > now && (dataToSave.planStatus === 'inactive' || dataToSave.planStatus === 'blocked')) {
@@ -493,7 +498,7 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
                   label="Qtd. Bônus"
                   type="number"
                   value={formData.manualSlots}
-                  onChange={e => setFormData({...formData, manualSlots: parseInt(e.target.value) || 0})}
+                  onChange={e => setFormData({...formData, manualSlots: e.target.value})}
                   icon={<Users className="w-4 h-4"/>}
                 />
                 <TechInput 
@@ -515,7 +520,7 @@ const CompanyEditModal: React.FC<{company: CompanyData, onClose: () => void, onS
               type="number"
               step="0.01"
               value={formData.pricePerEmployee}
-              onChange={e => setFormData({...formData, pricePerEmployee: parseFloat(e.target.value) || 0})}
+              onChange={e => setFormData({...formData, pricePerEmployee: e.target.value})}
               icon={<DollarSign className="w-4 h-4"/>}
             />
 
