@@ -27,24 +27,46 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    setIsLoading(true);
     const unsubCompanies = onSnapshot(collection(db, 'companies'), async (snapshot) => {
-      setIsLoading(true);
-      const allCompaniesData = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as CompanyData));
-      
-      const companiesWithCounts = await Promise.all(
-        allCompaniesData.map(async (company) => {
-          const employeesQuery = query(collection(db, 'employees'), where('companyId', '==', company.uid));
-          const employeesSnapshot = await getDocs(employeesQuery);
-          return {
-            ...company,
-            employeeCount: employeesSnapshot.size,
-          };
-        })
-      );
+      try {
+        const allCompaniesData = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as CompanyData));
+        
+        const companiesWithCounts = await Promise.all(
+          allCompaniesData.map(async (company) => {
+            try {
+              const employeesQuery = query(collection(db, 'employees'), where('companyId', '==', company.uid));
+              const employeesSnapshot = await getDocs(employeesQuery);
+              return {
+                ...company,
+                employeeCount: employeesSnapshot.size,
+              };
+            } catch (err) {
+              console.error(`Error fetching employees for company ${company.companyName}:`, err);
+              return {
+                ...company,
+                employeeCount: 0,
+              };
+            }
+          })
+        );
 
-      setCompanies(companiesWithCounts as CompanyWithCount[]);
-      setFilteredCompanies(companiesWithCounts as CompanyWithCount[]);
+        setCompanies(companiesWithCounts as CompanyWithCount[]);
+        setFilteredCompanies(companiesWithCounts as CompanyWithCount[]);
+      } catch (error) {
+        console.error("Error processing companies data:", error);
+        showFeedback('error', 'Erro ao processar dados das empresas.');
+      } finally {
+        setIsLoading(false);
+      }
+    }, (error) => {
+      console.error("Error fetching companies:", error);
       setIsLoading(false);
+      if (error.code === 'permission-denied') {
+        showFeedback('error', 'Permissão negada. Verifique se você é um Super Admin e se as regras do Firestore estão atualizadas.');
+      } else {
+        showFeedback('error', 'Erro ao carregar lista de empresas.');
+      }
     });
 
     return () => unsubCompanies();
