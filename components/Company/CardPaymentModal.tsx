@@ -32,6 +32,7 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         console.error("TIMEOUT: O Brick do Mercado Pago demorou para carregar.");
         setError("O sistema de pagamento demorou muito para responder. Verifique sua conexão ou a configuração da chave.");
         setIsInitializing(false);
+        setIsLoading(false);
       }
     }, 8000);
 
@@ -71,7 +72,7 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
     amount: Number(amount),
     payer: {
       email: payerEmail || 'cliente@nexuswork.com.br',
-      entity_type: 'individual',
+      entity_type: 'individual' as const,
       first_name: 'Cliente',
       last_name: 'Nexus',
     },
@@ -113,7 +114,8 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
   };
 
   const onBrickReady = () => {
-    console.log('Brick Ready.');
+    console.log("Brick Carregado com Sucesso - Cancelando Timeout");
+    setIsLoading(false);
     setIsInitializing(false);
   };
 
@@ -151,13 +153,15 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
             </div>
           )}
           {isBrickReady && !error && (
-            <Payment
-              initialization={initialization}
-              customization={customization}
-              onSubmit={onSubmit}
-              onError={onBrickError}
-              onReady={onBrickReady}
-            />
+            <div style={{ minHeight: '500px' }}>
+              <Payment
+                initialization={initialization}
+                customization={customization}
+                onSubmit={onSubmit}
+                onError={onBrickError}
+                onReady={onBrickReady}
+              />
+            </div>
           )}
         </div>
       </div>
