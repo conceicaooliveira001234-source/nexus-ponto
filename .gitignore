@@ -30,3 +30,4 @@ serviceAccountKey.json
 # Arquivos de configuração gerados
 FIRESTORE_INDICES_INSTRUCTIONS.txt
 .aider*
+.vercel
