@@ -9,7 +9,7 @@ import { UserRole, ViewState, CompanyData, EmployeeContext, ServiceLocation, Das
 import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import { auth, db } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import InstallButton from './components/InstallButton';
 
 const SUPER_ADMIN_EMAIL = 'admin@agentb.com';
@@ -72,7 +72,7 @@ const App: React.FC = () => {
             const data = docSnap.data() as CompanyData;
 
             // SaaS Subscription/Block Check
-            if (data.isBlocked) {
+            if (data.planStatus === 'blocked') {
               alert('Sua conta está bloqueada. Entre em contato com o suporte.');
               await signOut(auth);
               setView('LANDING');
@@ -80,7 +80,7 @@ const App: React.FC = () => {
               return;
             }
 
-            if (data.planExpiresAt && new Date(data.planExpiresAt) < new Date()) {
+            if (data.subscriptionExpiresAt && (data.subscriptionExpiresAt as unknown as Timestamp).toDate() < new Date()) {
               alert('Seu plano expirou. Renove sua assinatura para continuar.');
               setCurrentCompany({ ...data, uid: user.uid });
               setView('DASHBOARD_COMPANY');
