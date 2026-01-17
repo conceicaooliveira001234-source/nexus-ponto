@@ -21,6 +21,7 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
   const [companyToDelete, setCompanyToDelete] = useState<CompanyData | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -109,6 +110,7 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
         <table className="w-full text-sm text-left text-slate-400">
           <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 font-mono">
             <tr>
+              <th scope="col" className="px-2 py-3 w-12"></th>
               <th scope="col" className="px-6 py-3">Empresa</th>
               <th scope="col" className="px-6 py-3">Status</th>
               <th scope="col" className="px-6 py-3">Cota</th>
@@ -117,7 +119,7 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="text-center p-8"><Loader2 className="animate-spin inline-block"/></td></tr>}
+            {isLoading && <tr><td colSpan={6} className="text-center p-8"><Loader2 className="animate-spin inline-block"/></td></tr>}
             {!isLoading && companies.map(company => {
               const isExpired = company.subscriptionExpiresAt && new Date(company.subscriptionExpiresAt) < new Date();
               const status = company.planStatus || (isExpired ? 'inactive' : 'active');
@@ -129,32 +131,50 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
               };
 
               return (
-                <tr key={company.uid} className="border-b border-slate-800 hover:bg-slate-800/30">
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{company.companyName}</td>
-                  <td className={`px-6 py-4 font-bold capitalize ${statusStyles[status]}`}>{status}</td>
-                  <td className="px-6 py-4">{company.employeeCount} / {company.maxEmployees || '∞'}</td>
-                  <td className="px-6 py-4">{company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toLocaleDateString('pt-BR') : 'N/A'}</td>
-                  <td className="px-6 py-4 text-right">
-                    {isDeleting === company.uid ? <Loader2 className="w-5 h-5 animate-spin text-red-400 ml-auto" /> : (
-                      <div className="flex justify-end items-center gap-4">
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Acessar o painel de ${company.companyName}?`)) {
-                              onImpersonate(company);
-                            }
-                          }}
-                          className="font-medium text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1 text-xs"
-                        >
-                          <ExternalLink className="w-3 h-3" /> Acessar
-                        </button>
-                        <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline text-xs">Editar</button>
-                        <button onClick={() => setCompanyToDelete(company)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
+                <React.Fragment key={company.uid}>
+                  <tr className="border-b border-slate-800 hover:bg-slate-800/30">
+                    <td className="px-2 text-center">
+                      <button 
+                        onClick={() => setExpandedCompanyId(expandedCompanyId === company.uid ? null : company.uid)}
+                        className="p-2 rounded-full hover:bg-slate-700 text-slate-400"
+                        title="Ver detalhes"
+                      >
+                        {expandedCompanyId === company.uid ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{company.companyName}</td>
+                    <td className={`px-6 py-4 font-bold capitalize ${statusStyles[status]}`}>{status}</td>
+                    <td className="px-6 py-4">{company.employeeCount} / {company.maxEmployees || '∞'}</td>
+                    <td className="px-6 py-4">{company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toLocaleDateString('pt-BR') : 'N/A'}</td>
+                    <td className="px-6 py-4 text-right">
+                      {isDeleting === company.uid ? <Loader2 className="w-5 h-5 animate-spin text-red-400 ml-auto" /> : (
+                        <div className="flex justify-end items-center gap-4">
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Acessar o painel de ${company.companyName}?`)) {
+                                onImpersonate(company);
+                              }
+                            }}
+                            className="font-medium text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1 text-xs"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Acessar
+                          </button>
+                          <button onClick={() => setEditingCompany(company)} className="font-medium text-cyan-400 hover:underline text-xs">Editar</button>
+                          <button onClick={() => setCompanyToDelete(company)} className="p-1 text-slate-500 hover:text-red-400" title="Excluir Empresa">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {expandedCompanyId === company.uid && (
+                    <tr>
+                      <td colSpan={6} className="p-0 bg-slate-950">
+                        <CompanyDetails company={company} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -162,6 +182,119 @@ const SuperAdminCompanies: React.FC<SuperAdminCompaniesProps> = ({ onImpersonate
       </div>
       {editingCompany && <CompanyEditModal company={editingCompany} onClose={() => setEditingCompany(null)} onSave={handleUpdateCompany} />}
       {companyToDelete && <DeleteConfirmationModal company={companyToDelete} onClose={() => setCompanyToDelete(null)} onConfirm={handleDeleteCompany} isDeleting={!!isDeleting} />}
+    </div>
+  );
+};
+
+const CompanyDetails: React.FC<{ company: CompanyData }> = ({ company }) => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [copySuccess, setCopySuccess] = useState('');
+
+  useEffect(() => {
+    const transactionsQuery = query(
+      collection(db, `companies/${company.uid}/transactions`),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+
+    const unsubscribe = onSnapshot(transactionsQuery, (snapshot) => {
+      const trans: Transaction[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Transaction));
+      setTransactions(trans);
+      setLoadingTransactions(false);
+    }, (error) => {
+      console.error(`Error fetching transactions for ${company.companyName}:`, error);
+      setLoadingTransactions(false);
+    });
+
+    return () => unsubscribe();
+  }, [company.uid]);
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopySuccess('ID Copiado!');
+      setTimeout(() => setCopySuccess(''), 2000);
+    });
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  };
+  
+  const now = new Date();
+  const isPurchasedExpired = company.purchasedExpiresAt ? new Date(company.purchasedExpiresAt) < now : false;
+  const isManualExpired = company.manualExpiresAt ? new Date(company.manualExpiresAt) < now : false;
+
+  const statusInfo = {
+    pending: { text: 'Pix Gerado', color: 'text-amber-400 bg-amber-900/50' },
+    approved: { text: 'Aprovado', color: 'text-green-400 bg-green-900/50' },
+    rejected: { text: 'Rejeitado', color: 'text-red-400 bg-red-900/50' },
+    cancelled: { text: 'Cancelado', color: 'text-red-400 bg-red-900/50' },
+  };
+
+  return (
+    <div className="bg-slate-900/80 p-6 animate-in fade-in">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4 flex items-center gap-2"><FilePieChart className="w-4 h-4 text-cyan-400"/> Raio-X do Plano</h4>
+          <div className="space-y-3 text-xs font-mono">
+            <div className={`p-3 rounded bg-slate-900 border ${isPurchasedExpired && (company.purchasedSlots ?? 0) > 0 ? 'border-red-500/30' : 'border-cyan-500/20'}`}>
+              <div className="flex justify-between items-center text-cyan-400">
+                <span className="flex items-center gap-2"><ShoppingBag className="w-3 h-3"/> Plano Contratado</span>
+                <span className="font-bold text-lg text-white">{company.purchasedSlots ?? 0}</span>
+              </div>
+              <p className={`text-right mt-1 ${isPurchasedExpired && (company.purchasedSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>Vence: {formatDate(company.purchasedExpiresAt)}</p>
+            </div>
+            <div className={`p-3 rounded bg-slate-900 border ${isManualExpired && (company.manualSlots ?? 0) > 0 ? 'border-red-500/30' : 'border-fuchsia-500/20'}`}>
+              <div className="flex justify-between items-center text-fuchsia-400">
+                <span className="flex items-center gap-2"><Award className="w-3 h-3"/> Bônus Manual</span>
+                <span className="font-bold text-lg text-white">{company.manualSlots ?? 0}</span>
+              </div>
+               <p className={`text-right mt-1 ${isManualExpired && (company.manualSlots ?? 0) > 0 ? 'text-red-400' : 'text-slate-500'}`}>Vence: {formatDate(company.manualExpiresAt)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4 flex items-center gap-2"><History className="w-4 h-4 text-green-400"/> Últimas Transações</h4>
+          <div className="space-y-2">
+            {loadingTransactions ? <div className="text-center p-4"><Loader2 className="animate-spin text-slate-500 inline-block"/></div> :
+              transactions.length > 0 ? transactions.map(tx => {
+                const status = statusInfo[tx.status] || { text: tx.status, color: 'text-slate-400 bg-slate-700' };
+                return (
+                  <div key={tx.id} className="flex justify-between items-center text-xs font-mono bg-slate-900 p-2 rounded">
+                    <div>
+                      <p className="text-slate-300">{formatDate(tx.createdAt)}</p>
+                      <p className="text-slate-500 text-[10px]">{tx.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-white">{tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>{status.text}</span>
+                    </div>
+                  </div>
+                )
+              }) : <p className="text-xs text-slate-500 text-center py-4">Nenhuma transação encontrada.</p>
+            }
+          </div>
+        </div>
+
+        <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+          <h4 className="font-mono text-sm uppercase text-slate-400 mb-4">Auditoria</h4>
+           <div className="space-y-3 text-xs text-slate-400 font-mono">
+              <div className="flex items-center gap-2"><Mail className="w-3 h-3"/> <span>{company.email}</span></div>
+              <div className="flex items-center gap-2"><Phone className="w-3 h-3"/> <span>{company.whatsapp}</span></div>
+              <div className="pt-3 border-t border-slate-800">
+                <p className="truncate text-slate-500" title={company.uid}>ID: {company.uid}</p>
+                <button onClick={() => handleCopy(company.uid!)} className="text-cyan-400 hover:underline flex items-center gap-1 mt-1 text-xs">
+                  <ClipboardCopy className="w-3 h-3" /> {copySuccess || 'Copiar ID'}
+                </button>
+              </div>
+           </div>
+        </div>
+
+      </div>
     </div>
   );
 };
