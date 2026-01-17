@@ -3,7 +3,7 @@ import {
   ArrowLeft, LayoutDashboard, Activity, Lock, MapPin, 
   Users, Settings, Plus, Save, Trash2, FileText, User, FileBadge,
   Crosshair, Globe, ExternalLink, Loader2, List, UserPlus, CheckCircle, Edit3, Camera, ScanFace, KeyRound, Clock, X, LogIn, Coffee, Play, LogOut,
-  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff, CreditCard
+  AlertCircle, Info, Calendar, History, Building2, Briefcase, Trophy, Share2, Copy, Bell, BellOff, CreditCard, Menu
 } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import TechBackground from './TechBackground';
@@ -54,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // -- Settings State --
   const [tenantCode, setTenantCode] = useState('');
@@ -2364,9 +2365,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
   // -- RENDER: ADMIN DASHBOARD --
   if (isCompany) {
     return (
-      <div className="relative min-h-screen flex">
+      <div className="relative min-h-screen flex bg-slate-950">
         <TechBackground />
         
+        {/* Desktop Sidebar */}
         <aside className="relative z-30 w-64 hidden md:flex flex-col border-r border-slate-800 bg-slate-950/80 backdrop-blur-md">
           <div className="p-6 border-b border-slate-800">
             <h2 className="font-tech text-xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-white font-bold truncate">
@@ -2452,7 +2454,7 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
           </div>
         </aside>
 
-        <main className="relative z-30 flex-1 h-screen overflow-y-auto overflow-x-hidden">
+        <main className="relative z-30 flex-1 h-screen overflow-y-auto overflow-x-hidden pb-24 md:pb-0">
           {isSubscriptionExpired && (
             <div className="sticky top-0 w-full p-2 bg-red-600/90 backdrop-blur border-b-2 border-red-400 text-white text-center text-sm font-bold z-50">
               Sua assinatura expirou. Renove para reativar todas as funcionalidades.
@@ -2468,24 +2470,18 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               ⚡ Conexão reestabelecida. Sincronizando...
             </div>
           )}
+          
           {/* Mobile Header */}
-          <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-             <h2 className="font-tech text-lg text-white truncate">{companyName.toUpperCase()}</h2>
-             <button onClick={onBack} className="text-slate-400"><ArrowLeft /></button>
+          <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/90 backdrop-blur sticky top-0 z-40">
+             <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                   <Building2 className="w-5 h-5 text-cyan-400" />
+                </div>
+                <h2 className="font-tech text-sm text-white truncate max-w-[200px]">{companyName.toUpperCase()}</h2>
+             </div>
           </div>
 
-          {/* Mobile Nav */}
-          <div className="md:hidden flex overflow-x-auto p-2 gap-2 bg-slate-900 border-b border-slate-800">
-            {/* ... tabs ... */}
-            <button onClick={() => handleTabChange('OVERVIEW')} className={`px-4 py-2 rounded text-xs ${activeTab === 'OVERVIEW' ? 'bg-cyan-600' : 'text-slate-400'}`}>Visão</button>
-            <button onClick={() => handleTabChange('LOCATIONS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'LOCATIONS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Locais</button>
-            <button onClick={() => handleTabChange('EMPLOYEES')} className={`px-4 py-2 rounded text-xs ${activeTab === 'EMPLOYEES' ? 'bg-cyan-600' : 'text-slate-400'}`}>Func.</button>
-            <button onClick={() => handleTabChange('SHIFTS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SHIFTS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Turnos</button>
-            <button onClick={() => handleTabChange('BILLING')} className={`px-4 py-2 rounded text-xs ${activeTab === 'BILLING' ? 'bg-cyan-600' : 'text-slate-400'}`}>Financ.</button>
-            <button onClick={() => handleTabChange('SETTINGS')} className={`px-4 py-2 rounded text-xs ${activeTab === 'SETTINGS' ? 'bg-cyan-600' : 'text-slate-400'}`}>Config</button>
-          </div>
-
-          <div className="p-6 md:p-12 max-w-6xl mx-auto">
+          <div className="p-4 md:p-12 max-w-6xl mx-auto">
             {/* RENDER CONTENT BASED ON TAB */}
             {activeTab === 'OVERVIEW' && (
               <div className="space-y-8">
@@ -2573,8 +2569,8 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
 
             {activeTab === 'EMPLOYEES' && (
               <div className="space-y-6">
-                 {/* Sub-menu styled as distinct screens */}
-                 <div className="flex bg-slate-950 p-1.5 rounded-lg border border-slate-800 w-fit gap-1">
+                 {/* Sub-menu adapted for mobile */}
+                 <div className="flex flex-col md:flex-row bg-slate-950 p-1.5 rounded-lg border border-slate-800 w-full md:w-fit gap-2 md:gap-1">
                     <button 
                       onClick={() => {
                         if (companyDetails && typeof companyDetails.maxEmployees === 'number' && employees.length >= companyDetails.maxEmployees) {
@@ -2584,11 +2580,11 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
                         }
                         setEmployeeSubTab('REGISTER');
                       }} 
-                      className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'REGISTER' ? 'bg-slate-800 text-white border border-slate-700 shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
-                       <UserPlus className="w-4 h-4" /> {editingEmployeeId ? 'Editar Funcionário' : 'Cadastro de Funcionário'}
+                      className={`flex items-center justify-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all w-full md:w-auto ${employeeSubTab === 'REGISTER' ? 'bg-slate-800 text-white border border-slate-700 shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
+                       <UserPlus className="w-4 h-4" /> {editingEmployeeId ? 'Editar' : 'Novo Cadastro'}
                     </button>
-                    <button onClick={() => setEmployeeSubTab('LIST')} className={`flex items-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all ${employeeSubTab === 'LIST' ? 'bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
-                       <List className="w-4 h-4" /> Funcionários Cadastrados
+                    <button onClick={() => setEmployeeSubTab('LIST')} className={`flex items-center justify-center gap-2 px-6 py-3 rounded-md text-sm font-bold uppercase tracking-wide transition-all w-full md:w-auto ${employeeSubTab === 'LIST' ? 'bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'}`}>
+                       <List className="w-4 h-4" /> Lista de Funcionários
                     </button>
                  </div>
                  
@@ -3049,7 +3045,63 @@ const Dashboard: React.FC<DashboardProps> = ({ role, onBack, currentCompanyId, e
               </div>
             )}
           </div>
-          {/* Link Generation Modal */}
+
+          {/* Mobile Bottom Navigation - NEW */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800 z-50 pb-safe">
+            <div className="flex justify-around items-center p-2">
+               <button onClick={() => handleTabChange('OVERVIEW')} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'OVERVIEW' ? 'text-cyan-400' : 'text-slate-500'}`}>
+                  <LayoutDashboard className={`w-6 h-6 ${activeTab === 'OVERVIEW' ? 'fill-cyan-400/20' : ''}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Visão</span>
+               </button>
+               <button onClick={() => handleTabChange('EMPLOYEES')} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'EMPLOYEES' ? 'text-cyan-400' : 'text-slate-500'}`}>
+                  <Users className={`w-6 h-6 ${activeTab === 'EMPLOYEES' ? 'fill-cyan-400/20' : ''}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Func.</span>
+               </button>
+               <button onClick={() => handleTabChange('LOCATIONS')} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'LOCATIONS' ? 'text-cyan-400' : 'text-slate-500'}`}>
+                  <MapPin className={`w-6 h-6 ${activeTab === 'LOCATIONS' ? 'fill-cyan-400/20' : ''}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Locais</span>
+               </button>
+               <button onClick={() => handleTabChange('SHIFTS')} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'SHIFTS' ? 'text-cyan-400' : 'text-slate-500'}`}>
+                  <Clock className={`w-6 h-6 ${activeTab === 'SHIFTS' ? 'fill-cyan-400/20' : ''}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Turnos</span>
+               </button>
+               <button onClick={() => setIsMobileMenuOpen(true)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors text-slate-500 hover:text-slate-300`}>
+                  <Menu className="w-6 h-6" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Menu</span>
+               </button>
+            </div>
+          </div>
+
+          {/* Mobile Menu Overlay - NEW */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm animate-in fade-in flex flex-col justify-end" onClick={() => setIsMobileMenuOpen(false)}>
+               <div className="bg-slate-900 border-t border-slate-700 rounded-t-2xl p-6 space-y-6 animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center">
+                     <h3 className="font-tech text-lg text-white">Menu Principal</h3>
+                     <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                     <button onClick={() => { handleTabChange('BILLING'); setIsMobileMenuOpen(false); }} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-green-500/30 bg-slate-950/50 text-green-400 hover:bg-green-500/10 transition-all">
+                        <CreditCard className="w-8 h-8" />
+                        <span className="font-bold text-sm">Financeiro</span>
+                     </button>
+                     <button onClick={() => { handleTabChange('SETTINGS'); setIsMobileMenuOpen(false); }} className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl border border-slate-700 bg-slate-950/50 text-slate-300 hover:bg-slate-800 transition-all">
+                        <Settings className="w-8 h-8" />
+                        <span className="font-bold text-sm">Configurações</span>
+                     </button>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-800">
+                     <button onClick={onBack} className="w-full flex items-center justify-center gap-2 p-4 bg-red-500/10 text-red-400 rounded-xl font-bold border border-red-500/20 hover:bg-red-500/20 transition-all">
+                        <LogOut className="w-5 h-5" /> SAIR DA CONTA
+                     </button>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* ... Modals ... */}
           {showLinkModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
               <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] relative">
