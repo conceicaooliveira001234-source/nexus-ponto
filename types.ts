@@ -110,3 +110,15 @@ export interface SelectionCardProps {
   color: 'cyan' | 'fuchsia';
   onClick: (role: UserRole) => void;
 }
+
+export interface Transaction {
+  id: string;
+  companyId: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  paymentMethod: 'pix' | 'credit_card';
+  createdAt: string; // ISO Date
+  approvedAt?: string; // ISO Date
+  description: string; // Ex: "Compra de 5 Slots"
+  externalReference?: string; // ID do Mercado Pago
+}
