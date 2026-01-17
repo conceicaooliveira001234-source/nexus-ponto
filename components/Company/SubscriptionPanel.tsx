@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CompanyData } from '../../types';
 import { db } from '../../lib/firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { processPixPayment, checkPaymentStatus } from '../../lib/mercadopago';
 import TechInput from '../ui/TechInput';
 import { Loader2, QrCode, Copy, CheckCircle } from 'lucide-react';
@@ -20,10 +20,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
   const [payerCpf, setPayerCpf] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [pixData, setPixData] = useState<{ paymentId: number; qrCode: string; qrCodeBase64: string } | null>(null);
+  const [pixData, setPixData] = useState<{ paymentId: number; qrCode: string; qrCodeBase64: string; transactionId: string; } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'cancelled' | null>(null);
 
-  const handlePaymentSuccess = useCallback(async (newPurchasedSlots: number) => {
+  const handlePaymentSuccess = useCallback(async (newPurchasedSlots: number, transactionId: string) => {
     const newPurchasedExpiryDate = new Date();
     newPurchasedExpiryDate.setDate(newPurchasedExpiryDate.getDate() + 30);
 
@@ -48,13 +48,20 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
         latestExpiryDate = manualExpiresAt;
       }
       
-      // 3. Update doc in Firestore
+      // 3. Update company and transaction doc in Firestore
+      const transactionRef = doc(db, `companies/${companyId}/transactions`, transactionId);
+      
       await updateDoc(companyRef, {
         purchasedSlots: newPurchasedSlots,
         purchasedExpiresAt: newPurchasedExpiryDate.toISOString(),
         planStatus: 'active',
         maxEmployees: newTotalEmployees,
         subscriptionExpiresAt: latestExpiryDate.toISOString(),
+      });
+
+      await updateDoc(transactionRef, {
+        status: 'approved',
+        approvedAt: now.toISOString(),
       });
 
       setPaymentStatus('approved');
@@ -73,7 +80,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
         try {
           const status = await checkPaymentStatus(pixData.paymentId);
           if (status === 'approved') {
-            await handlePaymentSuccess(numEmployees);
+            await handlePaymentSuccess(numEmployees, pixData.transactionId);
             if (interval) clearInterval(interval);
           } else if (status === 'cancelled' || status === 'expired') {
             setPaymentStatus('cancelled');
@@ -107,9 +114,22 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({ company, companyI
         totalAmount,
         company!.email,
         payerCpf,
-        `Plano NexusWork - ${numEmployees} licenças`
+        `Compra de ${numEmployees} Slots`
       );
-      setPixData(response);
+
+      // Create transaction log
+      const transactionData = {
+        amount: totalAmount,
+        status: 'pending',
+        paymentMethod: 'pix',
+        createdAt: new Date().toISOString(),
+        externalReference: String(response.paymentId),
+        description: `Compra de ${numEmployees} Slots`,
+        companyId: companyId,
+      };
+      const transactionRef = await addDoc(collection(db, `companies/${companyId}/transactions`), transactionData);
+
+      setPixData({ ...response, transactionId: transactionRef.id });
       setPaymentStatus('pending');
     } catch (err: any) {
       setError(err.message || 'Erro ao gerar cobrança PIX.');
