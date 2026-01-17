@@ -14,37 +14,57 @@ interface CardPaymentModalProps {
 const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail, onClose, onPaymentSuccess }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isReady, setIsReady] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isBrickReady, setIsBrickReady] = useState(false);
   const initialized = useRef(false);
 
   useEffect(() => {
-    // Trava de seguranca contra StrictMode
+    // Trava de segurança para evitar re-execução em StrictMode
     if (initialized.current) return;
     initialized.current = true;
-
+    
     let isMounted = true;
+    console.log('Buscando chave...');
+
+    // Timeout de segurança para o carregamento do Brick
+    const timeoutId = setTimeout(() => {
+      if (isMounted && isInitializing) {
+        console.error("TIMEOUT: O Brick do Mercado Pago demorou para carregar.");
+        setError("O sistema de pagamento demorou muito para responder. Verifique sua conexão ou a configuração da chave.");
+        setIsInitializing(false);
+      }
+    }, 8000);
+
     const initializeMP = async () => {
       try {
         const publicKey = await getPublicKey();
-        
         if (!isMounted) return;
 
-        if (publicKey) {
-          initMercadoPago(publicKey, { locale: 'pt-BR' });
-          
-          // Delay de 1 segundo para estabilizar o modal antes de carregar o Brick
-          setTimeout(() => {
-            if (isMounted) setIsReady(true);
-          }, 1000);
-        } else {
-          setError('Erro: Chave Publica nao encontrada no sistema.');
+        if (!publicKey) {
+          console.error("CHAVE NÃO ENCONTRADA NO FIRESTORE");
+          setError("Erro: Chave Pública não configurada no Painel Super Admin.");
+          setIsInitializing(false);
+          return;
         }
+
+        console.log("Chave encontrada:", publicKey);
+        await initMercadoPago(publicKey, { locale: 'pt-BR' });
+        console.log("Iniciando Brick...");
+        setIsBrickReady(true);
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Erro ao inicializar.');
+        if (isMounted) {
+          setError(err.message || 'Erro ao inicializar o sistema de pagamento.');
+          setIsInitializing(false);
+        }
       }
     };
+
     initializeMP();
-    return () => { isMounted = false; };
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const initialization = {
@@ -85,12 +105,16 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
     }
   };
 
-  const onError = (err: any) => {
-    console.error('Erro no componente Brick:', err);
+  const onBrickError = (err: any) => {
+    console.error('Erro no componente Brick do Mercado Pago:', err);
+    setError('Ocorreu um erro no formulário de pagamento. Por favor, verifique os dados e tente novamente.');
+    setIsInitializing(false);
+    setIsBrickReady(false);
   };
 
-  const onReady = () => {
-    console.log('Formulario carregado com sucesso.');
+  const onBrickReady = () => {
+    console.log('Brick Ready.');
+    setIsInitializing(false);
   };
 
   return (
@@ -120,18 +144,19 @@ const CardPaymentModal: React.FC<CardPaymentModalProps> = ({ amount, payerEmail,
         )}
 
         <div className="min-h-[500px] flex flex-col justify-center">
-          {!isReady ? (
+          {isInitializing && (
             <div className="flex flex-col items-center text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin mb-2" />
-              <p>Carregando formulario seguro...</p>
+              <p>Carregando formulário seguro...</p>
             </div>
-          ) : (
+          )}
+          {isBrickReady && !error && (
             <Payment
               initialization={initialization}
               customization={customization}
               onSubmit={onSubmit}
-              onError={onError}
-              onReady={onReady}
+              onError={onBrickError}
+              onReady={onBrickReady}
             />
           )}
         </div>
